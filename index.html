@@ -279,6 +279,7 @@ async function render(session) {
   if (data && data.username) { $('whoami').textContent = data.username; names[me.id] = data.username; }
   else if (!meta) $('whoami').textContent = me.email;
   startRealtime();
+  ensureSystemNotify();     // v0.2.1：登录后申请通知权限、建通知渠道
   loadFriends();
   loadConvs();
 }
@@ -508,6 +509,7 @@ async function openConv(id, target) {
   openId = id;
   unread[id] = 0;
   syncTitle();
+  clearDelivered();          // v0.2.1：进了这个聊天，把系统通知清掉
   chatData = []; chatIds = new Set(); hasOlder = false; hasNewer = false;
   $('chatTitle').textContent = c.type === 'group' ? `${c.title}（${c.members.length}人）` : c.title;
   $('chatMsgs').innerHTML = '';
@@ -753,15 +755,100 @@ function setNotify(on) {
 $('notifyBtn').onclick = () => setNotify(!notifyOn);
 setNotify(notifyOn);
 
+// ================= 系统通知（锁屏 / 横幅 / 桌面角标）=================
+// 通过 Capacitor LocalNotifications 插件调用安卓原生通知。
+// 普通浏览器里拿不到插件，LN 为 null，会自动退回应用内弹窗。
+const Cap = window.Capacitor;
+const LN = (Cap && Cap.Plugins && Cap.Plugins.LocalNotifications) || null;
+let lnReady = false;   // 插件存在且已授权
+let lnInit = false;
+
+async function ensureSystemNotify() {
+  if (!LN || lnInit) return;
+  lnInit = true;
+  try {
+    let perm = await LN.checkPermissions();
+    if (perm.display !== 'granted') perm = await LN.requestPermissions();
+    if (perm.display !== 'granted') { console.warn('通知权限被拒绝'); return; }
+
+    // importance 5 = IMPORTANCE_HIGH：只有 HIGH 才会有「横幅（heads-up）」
+    await LN.createChannel({
+      id: 'msg',
+      name: '新消息',
+      description: '有人给你发消息时提醒',
+      importance: 5,
+      visibility: 1,      // 锁屏显示完整内容
+      lights: true,
+      vibration: true,
+    });
+
+    // 点击通知 → 直接进对应聊天
+    LN.addListener('localNotificationActionPerformed', ev => {
+      const cid = ev && ev.notification && ev.notification.extra && ev.notification.extra.cid;
+      if (cid && convs[cid]) openConv(cid);
+      else ensureSystemNotify();
+    });
+
+    lnReady = true;
+  } catch (e) {
+    console.warn('系统通知初始化失败：', e);
+  }
+}
+
+// 聊天 id（字符串）→ 通知 id（整数）；同一聊天反复提醒会覆盖，不会堆一屏
+function cidToId(cid) {
+  let h = 0;
+  for (let i = 0; i < cid.length; i++) h = (h * 31 + cid.charCodeAt(i)) | 0;
+  return (Math.abs(h) % 100000) + 1;
+}
+
+async function systemNotify(m) {
+  if (!LN || !lnReady || !notifyOn || !me || m.sender_id === me.id) return;
+  const cid = m.conversation_id;
+  const c = convs[cid];
+  const who = names[m.sender_id] || '某人';
+  const title = c && c.type === 'group' ? `${c.title} · ${who}` : who;
+  const body = (m.body || '（新消息）').replace(/\s+/g, ' ').slice(0, 120);
+  const total = Object.values(unread).reduce((a, b) => a + b, 0) || 1;
+  try {
+    await LN.schedule({
+      notifications: [{
+        id: cidToId(cid),
+        title,
+        body,
+        channelId: 'msg',
+        number: total,        // 桌面角标数字（支持的启动器会显示）
+        extra: { cid },       // 点击时用来跳转
+        autoClear: true,
+      }],
+    });
+  } catch (e) {
+    console.warn('系统通知发送失败：', e);
+  }
+}
+
+async function clearDelivered() {
+  if (!LN || !lnReady) return;
+  try { await LN.removeAllDeliveredNotifications(); } catch {}
+}
+
 // 页面标题同步未读数：切到后台时，任务栏也能看到
 function syncTitle() {
   const n = Object.values(unread).reduce((a, b) => a + b, 0);
   document.title = n ? `(${n}) Horizon` : 'Horizon';
+  // 桌面角标（支持的安卓启动器 / PWA 才生效）
+  if (navigator.setAppBadge) { try { navigator.setAppBadge(n || 0); } catch {} }
 }
 
-// 弹一条提醒；同一聊天 1.5 秒内只弹一次，最多同时 3 条
+// 新消息提醒：前台用应用内弹窗，后台用系统通知
 function pushNotify(m) {
   if (!notifyOn || !me || !m || m.sender_id === me.id) return;
+  if (document.hidden) { systemNotify(m); return; }   // App 在后台 → 系统通知（锁屏/横幅）
+  showInAppToast(m);
+}
+
+// 应用内弹窗；同一聊天 1.5 秒内只弹一次，最多同时 3 条
+function showInAppToast(m) {
   const cid = m.conversation_id;
   const now = Date.now();
   if (notifyAt[cid] && now - notifyAt[cid] < 1500) return;

@@ -1,11 +1,12 @@
 {
   "name": "horizon",
-  "version": "1.0.0",
+  "version": "0.2.1",
   "private": true,
   "dependencies": {
     "@capacitor/android": "^8.0.0",
     "@capacitor/cli": "^8.0.0",
     "@capacitor/core": "^8.0.0",
+    "@capacitor/local-notifications": "^8.0.0",
     "@supabase/supabase-js": "^2.0.0"
   }
 }
