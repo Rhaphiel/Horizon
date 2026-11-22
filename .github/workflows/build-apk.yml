@@ -1,11 +1,10 @@
 name: Build APK
 
 on:
-  workflow_dispatch:      # 允许在网页上手动点按钮运行
+  workflow_dispatch:    # 允许在页面上手动点按钮运行
   push:
-    branches: [main]      # 每次更新 main 分支也会自动运行
+    branches: [main]    # 每次更新 main 分支会自动运行
 
-# 新的构建开始时，自动取消还没跑完的旧构建
 concurrency:
   group: build-apk
   cancel-in-progress: true
@@ -13,7 +12,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 40     # 超过 40 分钟自动停止，避免一直卡住
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -27,7 +26,6 @@ jobs:
           java-version: 21
 
       - name: Install dependencies
-        timeout-minutes: 8   # 正常只需几十秒，卡住就尽早失败
         run: npm install --no-audit --no-fund --loglevel=http
 
       - name: Prepare web files
@@ -40,10 +38,42 @@ jobs:
       - name: Copy supabase library into the app
         run: cp node_modules/@supabase/supabase-js/dist/umd/supabase.js www/supabase.js
 
+      # 静态 HTML 项目没有 Vite/Webpack；用 esbuild 将 Capacitor 8 插件 JS 包装成普通脚本。
+      - name: Bundle Capacitor native plugin bridges
+        run: npx esbuild native-plugins-entry.js --bundle --format=iife --outfile=www/native-plugins.js
+
       - name: Create Android project
+        run: npx cap add android
+
+      # Firebase 客户端配置：可将 google-services.json 放在仓库根目录，
+      # 或将其 base64 内容保存为 GitHub Actions Secret: GOOGLE_SERVICES_JSON_BASE64。
+      - name: Configure Firebase for Android
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
         run: |
-          npx cap add android
-          npx cap sync android
+          if [ -f google-services.json ]; then
+            mkdir -p android/app
+            cp google-services.json android/app/google-services.json
+            echo "Firebase config copied from repository."
+          elif [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            mkdir -p android/app
+            printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
+            echo "Firebase config decoded from GitHub Secret."
+          else
+            echo "::warning::Firebase config missing. APK can build, but FCM registration will not work until configured."
+          fi
+
+      # Android 13+ 必须声明 POST_NOTIFICATIONS，否则系统通知静默失败
+      - name: Ensure POST_NOTIFICATIONS permission
+        run: |
+          MAN=android/app/src/main/AndroidManifest.xml
+          if ! grep -q 'POST_NOTIFICATIONS' "$MAN"; then
+            perl -0pi -e 's#(<uses-permission android:name="android.permission.INTERNET" />)#$1\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />#' "$MAN"
+          fi
+          grep -n 'uses-permission' "$MAN"
+
+      - name: Sync web assets
+        run: npx cap sync android
 
       - name: Build debug APK
         working-directory: android
