@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Horizon</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; background: #fff; color: #111; }
+  main { max-width: 480px; margin: 0 auto; padding: 48px 24px; }
+  h1 { font-size: 15px; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 24px; }
+  h2 { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #777; margin: 28px 0 8px; }
+  .tabs { display: flex; gap: 20px; border-bottom: 1px solid #e6e6e6; margin-bottom: 20px; }
+  .tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 0 0 8px; margin-bottom: -1px; color: #777; font: inherit; cursor: pointer; }
+  .tabs button.on { color: #111; border-bottom-color: #111; }
+  label { display: block; font-size: 12px; color: #777; margin-bottom: 16px; }
+  input { display: block; width: 100%; padding: 8px 0; border: 0; border-bottom: 1px solid #e6e6e6; font: inherit; outline: none; background: transparent; color: #111; }
+  input:focus { border-bottom-color: #111; }
+  input[type=checkbox] { display: inline-block; width: auto; margin-right: 8px; }
+  .go { width: 100%; padding: 10px; border: 1px solid #111; background: #111; color: #fff; font: inherit; cursor: pointer; margin-top: 8px; }
+  .go:disabled, .small:disabled { opacity: .4; cursor: default; }
+  .link { background: none; border: 0; padding: 0; color: #777; font: inherit; cursor: pointer; margin-left: 12px; }
+  .link:hover { color: #111; }
+  #msg, #homeMsg { min-height: 22px; margin-top: 16px; font-size: 13px; color: #c0392b; }
+  #msg.ok, #homeMsg.ok { color: #2e7d32; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+  li.empty { color: #aaa; font-size: 13px; }
+  li.conv { cursor: pointer; }
+  li.conv:hover { background: #fafafa; }
+  .sub { color: #999; font-size: 12px; margin-left: 8px; }
+  .badge { background: #111; color: #fff; font-size: 11px; padding: 0 7px; min-width: 18px; text-align: center; }
+  .small { border: 1px solid #e0e0e0; background: transparent; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer; margin-left: 6px; color: #111; }
+  .small:hover:not(:disabled) { border-color: #111; }
+  .inline { display: flex; gap: 8px; align-items: flex-end; }
+  .inline input { flex: 1; }
+  .inline .small { margin: 0 0 4px; padding: 6px 14px; }
+  .bar { display: flex; justify-content: space-between; align-items: center; }
+  .bar h2 { margin: 0; }
+  .box { border: 1px solid #e6e6e6; padding: 16px; margin: 12px 0; }
+  .box .pick { display: block; padding: 4px 0; color: #111; font-size: 14px; margin: 0; }
+  .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+  /* 聊天页面 */
+  main.chat { height: 100vh; height: 100dvh; display: flex; flex-direction: column; padding: 0; }
+  .chatTop { padding: 16px 20px; border-bottom: 1px solid #e6e6e6; display: flex; align-items: center; gap: 16px; }
+  .chatTop .link { margin: 0; }
+  .chatTop b { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #chatMsgs { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .day { align-self: center; color: #999; font-size: 11px; letter-spacing: .06em; }
+  .msg { max-width: 78%; display: flex; flex-direction: column; align-items: flex-start; }
+  .msg.mine { align-self: flex-end; align-items: flex-end; }
+  .msg .who { font-size: 12px; color: #777; margin-bottom: 2px; }
+  .bubble { background: #f3f3f3; padding: 8px 12px; border-radius: 2px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.mine .bubble { background: #111; color: #fff; }
+  .time { font-size: 11px; color: #999; margin-top: 2px; }
+  #chatNote { padding: 0 20px; min-height: 18px; font-size: 12px; color: #c0392b; }
+  #chatForm { display: flex; gap: 12px; align-items: flex-end; padding: 8px 20px 16px; border-top: 1px solid #e6e6e6; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+  #chatForm input { flex: 1; padding: 10px 0; }
+  #chatForm .small { margin: 0 0 6px; padding: 6px 16px; background: #111; color: #fff; border-color: #111; }
+  #msgSearchForm { margin: 12px 0; }
+  li.hit { display: block; cursor: pointer; }
+  li.hit:hover { background: #fafafa; }
+  .hit .meta { font-size: 12px; color: #777; }
+  .hit .snip { margin-top: 2px; overflow-wrap: anywhere; }
+  .hit b { background: #eee; font-weight: 600; }
+  .more { align-self: center; margin: 0; }
+  .msg.flash .bubble { outline: 2px solid #111; outline-offset: 2px; }
+  #chatSearch { padding: 12px 20px; border-bottom: 1px solid #e6e6e6; }
+  #chatHits { max-height: 40vh; overflow-y: auto; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- 登录 / 注册 -->
+<main id="authView" hidden>
+  <h1>Horizon</h1>
+  <div class="tabs">
+    <button id="tabLogin" class="on">登录</button>
+    <button id="tabRegister">注册</button>
+  </div>
+  <form id="authForm">
+    <label id="usernameRow" hidden>用户名（3–20 位，字母、数字或下划线）
+      <input id="username" autocomplete="username" maxlength="20">
+    </label>
+    <label>邮箱
+      <input id="email" type="email" autocomplete="email">
+    </label>
+    <label>密码（至少 6 位）
+      <input id="password" type="password" autocomplete="current-password">
+    </label>
+    <button class="go" id="submitBtn" type="submit">登录</button>
+  </form>
+  <div id="msg"></div>
+</main>
+
+<!-- 主页：聊天列表 / 好友 -->
+<main id="homeView" hidden>
+  <h1>Horizon</h1>
+  <p>你好，<b id="whoami"></b><button class="link" id="logoutBtn">退出登录</button></p>
+
+  <div class="tabs">
+    <button id="tabChats" class="on">聊天</button>
+    <button id="tabFriends">好友</button>
+  </div>
+
+  <section id="paneChats">
+    <div class="bar"><h2>我的聊天</h2><button class="small" id="newGroupBtn">新建群聊</button></div>
+    <div class="box" id="groupBox" hidden>
+      <label>群名称<input id="groupName" maxlength="30"></label>
+      <div id="groupFriends"></div>
+      <div class="row"><button class="small" id="groupCancel">取消</button><button class="small" id="groupCreate">创建</button></div>
+    </div>
+    <form id="msgSearchForm" class="inline">
+      <input id="mq" placeholder="搜索所有聊天记录" maxlength="50" autocomplete="off">
+      <button class="small" type="submit">搜索</button>
+    </form>
+    <ul id="msgHits"></ul>
+    <button class="link" id="clearHits" style="margin:8px 0 0" hidden>清除搜索结果</button>
+    <ul id="convList"></ul>
+  </section>
+
+  <section id="paneFriends" hidden>
+    <h2>搜索用户</h2>
+    <form id="searchForm" class="inline">
+      <input id="q" placeholder="输入用户名" maxlength="20" autocomplete="off">
+      <button class="small" type="submit">搜索</button>
+    </form>
+    <ul id="results"></ul>
+    <h2>收到的好友申请</h2>
+    <ul id="incoming"></ul>
+    <h2>我的好友</h2>
+    <ul id="friends"></ul>
+    <h2>已发出的申请</h2>
+    <ul id="outgoing"></ul>
+  </section>
+
+  <div id="homeMsg"></div>
+</main>
+
+<!-- 聊天页面 -->
+<main id="chatView" class="chat" hidden>
+  <div class="chatTop"><button class="link" id="backBtn">返回</button><b id="chatTitle"></b><button class="link" id="chatSearchBtn">搜索</button></div>
+  <div id="chatSearch" hidden>
+    <form id="chatSearchForm" class="inline">
+      <input id="cq" placeholder="搜索本聊天的消息" maxlength="50" autocomplete="off">
+      <button class="small" type="submit">搜索</button>
+    </form>
+    <ul id="chatHits"></ul>
+  </div>
+  <div id="chatMsgs"></div>
+  <div id="chatNote"></div>
+  <form id="chatForm">
+    <input id="chatInput" placeholder="输入消息" maxlength="1000" autocomplete="off">
+    <button class="small" id="chatSend" type="submit">发送</button>
+  </form>
+</main>
+
+<!-- 优先用本地的 supabase.js（打包成 APK 时会放进去）；找不到时自动改用网络版 -->
+<script src="supabase.js"></script>
+<script>if (!window.supabase) document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>');</script>
+<script>
+// ============ 你的 Supabase 信息 ============
+const SUPABASE_URL = 'https://osbjqvdzmqcztsxbsuyc.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_V0KVXmPOOnUTpzkQ7iLIow_JoCZ1ZBW';
+// ============================================
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const $ = id => document.getElementById(id);
+
+let mode = 'login';    // 登录页当前是登录还是注册
+let me = null;         // 当前登录的用户
+let names = {};        // 用户id -> 用户名
+let relations = {};    // 对方id -> 我和他的好友关系
+let friendList = [];   // 我的好友 [{id, name}]
+let lastQuery = '';    // 最近一次搜索关键词
+let convs = {};        // 聊天id -> 聊天信息
+let lastAt = {};       // 聊天id -> 最新消息时间（用来排序）
+let unread = {};       // 聊天id -> 未读条数（只在本次打开页面期间有效）
+let openId = null;     // 当前打开的聊天id
+let rt = null;         // 实时连接
+
+// ================= 登录 / 注册 =================
+function setMode(m) {
+  mode = m;
+  $('tabLogin').classList.toggle('on', m === 'login');
+  $('tabRegister').classList.toggle('on', m === 'register');
+  $('usernameRow').hidden = m === 'login';
+  $('submitBtn').textContent = m === 'login' ? '登录' : '注册';
+  $('password').autocomplete = m === 'login' ? 'current-password' : 'new-password';
+  say('');
+}
+$('tabLogin').onclick = () => setMode('login');
+$('tabRegister').onclick = () => setMode('register');
+
+function say(text, ok = false) {
+  $('msg').textContent = text;
+  $('msg').className = ok ? 'ok' : '';
+}
+
+$('authForm').onsubmit = async e => {
+  e.preventDefault();
+  const email = $('email').value.trim();
+  const password = $('password').value;
+  const username = $('username').value.trim();
+  if (!email || !password) return say('请填写邮箱和密码');
+  $('submitBtn').disabled = true;
+  say('请稍候…', true);
+  try {
+    if (mode === 'register') {
+      if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return say('用户名需为 3–20 位字母、数字或下划线');
+      const { data, error } = await db.auth.signUp({ email, password, options: { data: { username } } });
+      if (error) return say(friendly(error));
+      if (!data.session) return say('注册成功，请先到邮箱点击确认链接，再回来登录', true);
+    } else {
+      const { error } = await db.auth.signInWithPassword({ email, password });
+      if (error) return say(friendly(error));
+    }
+  } catch (err) {
+    say('网络出错，请检查网络（是否开了 VPN）后重试');
+  } finally {
+    $('submitBtn').disabled = false;
+  }
+};
+
+function friendly(error) {
+  const m = (error.message || '').toLowerCase();
+  if (m.includes('database error')) return '用户名已被占用或格式不对';
+  if (m.includes('already registered')) return '该邮箱已注册，请直接登录';
+  if (m.includes('invalid login')) return '邮箱或密码不正确';
+  if (m.includes('password')) return '密码不符合要求（至少 6 位）';
+  if (m.includes('rate limit')) return '操作太频繁，请稍后再试';
+  if (m.includes('email')) return '邮箱格式不正确';
+  return '出错了：' + error.message;
+}
+
+// ================= 页面切换 =================
+function showViews() {
+  $('authView').hidden = !!me;
+  $('homeView').hidden = !me || !!openId;
+  $('chatView').hidden = !me || !openId;
+}
+function setTab(name) {
+  $('tabChats').classList.toggle('on', name === 'chats');
+  $('tabFriends').classList.toggle('on', name === 'friends');
+  $('paneChats').hidden = name !== 'chats';
+  $('paneFriends').hidden = name !== 'friends';
+  homeSay('');
+}
+$('tabChats').onclick = () => setTab('chats');
+$('tabFriends').onclick = () => setTab('friends');
+
+async function render(session) {
+  if (!session) {
+    me = null; openId = null; convs = {}; names = {}; unread = {}; lastAt = {};
+    stopRealtime(); showViews(); return;
+  }
+  me = session.user;
+  showViews();
+  const meta = me.user_metadata && me.user_metadata.username;
+  $('whoami').textContent = meta || '';
+  if (meta) names[me.id] = meta;
+  const { data } = await db.from('profiles').select('username').eq('id', me.id).maybeSingle();
+  if (data && data.username) { $('whoami').textContent = data.username; names[me.id] = data.username; }
+  else if (!meta) $('whoami').textContent = me.email;
+  startRealtime();
+  loadFriends();
+  loadConvs();
+}
+// 注意：回调里不要直接请求数据库，用 setTimeout 延后一下
+db.auth.onAuthStateChange((_event, session) => { setTimeout(() => render(session), 0); });
+db.auth.getSession().then(({ data }) => render(data.session));
+$('logoutBtn').onclick = () => db.auth.signOut();
+
+// ================= 好友 =================
+function homeSay(text, ok = false) {
+  $('homeMsg').textContent = text;
+  $('homeMsg').className = ok ? 'ok' : '';
+}
+function addItem(ul, name, buttons = []) {
+  const li = document.createElement('li');
+  const nameEl = document.createElement('span');
+  nameEl.textContent = name;
+  li.append(nameEl);
+  const box = document.createElement('span');
+  for (const [label, fn] of buttons) {
+    const b = document.createElement('button');
+    b.className = 'small';
+    b.textContent = label;
+    b.onclick = async () => { b.disabled = true; await fn(); b.disabled = false; };
+    box.append(b);
+  }
+  li.append(box);
+  ul.append(li);
+}
+function addEmpty(ul, text) {
+  const li = document.createElement('li');
+  li.className = 'empty';
+  li.textContent = text;
+  ul.append(li);
+}
+
+async function loadFriends() {
+  if (!me) return;
+  const { data: rows, error } = await db.from('friendships').select('id,requester,addressee,status');
+  if (error) return homeSay('加载好友失败：' + error.message);
+  const ids = [...new Set(rows.flatMap(r => [r.requester, r.addressee]))].filter(id => id !== me.id);
+  if (ids.length) {
+    const { data: ps } = await db.from('profiles').select('id,username').in('id', ids);
+    (ps || []).forEach(p => { names[p.id] = p.username; });
+  }
+  relations = {};
+  friendList = [];
+  const inc = $('incoming'), fr = $('friends'), out = $('outgoing');
+  inc.innerHTML = fr.innerHTML = out.innerHTML = '';
+  for (const r of rows) {
+    const other = r.requester === me.id ? r.addressee : r.requester;
+    const name = names[other] || '（未知用户）';
+    relations[other] = { id: r.id, status: r.status, incoming: r.addressee === me.id };
+    if (r.status === 'accepted') {
+      friendList.push({ id: other, name });
+      addItem(fr, name, [['发消息', () => startDm(other)], ['删除', () => removeFriendship(r.id)]]);
+    } else if (r.addressee === me.id) {
+      addItem(inc, name, [['同意', () => acceptRequest(r.id)], ['拒绝', () => removeFriendship(r.id)]]);
+    } else {
+      addItem(out, name, [['撤回', () => removeFriendship(r.id)]]);
+    }
+  }
+  if (!inc.children.length) addEmpty(inc, '暂无');
+  if (!fr.children.length) addEmpty(fr, '还没有好友，先去搜索添加吧');
+  if (!out.children.length) addEmpty(out, '暂无');
+}
+
+async function runSearch() {
+  const ul = $('results');
+  ul.innerHTML = '';
+  if (!lastQuery) return;
+  const pattern = '%' + lastQuery.replace(/[\\%_]/g, '\\$&') + '%';
+  const { data, error } = await db.from('profiles').select('id,username')
+    .ilike('username', pattern).neq('id', me.id).limit(20);
+  if (error) return homeSay('搜索失败：' + error.message);
+  if (!data.length) return addEmpty(ul, '没有找到这个用户');
+  for (const p of data) {
+    names[p.id] = p.username;
+    const rel = relations[p.id];
+    if (!rel) addItem(ul, p.username, [['添加', () => sendRequest(p.id)]]);
+    else if (rel.status === 'accepted') addItem(ul, p.username + '（已是好友）', [['发消息', () => startDm(p.id)]]);
+    else if (rel.incoming) addItem(ul, p.username, [['同意', () => acceptRequest(rel.id)]]);
+    else addItem(ul, p.username + '（已申请）');
+  }
+}
+$('searchForm').onsubmit = async e => {
+  e.preventDefault();
+  lastQuery = $('q').value.trim();
+  homeSay('');
+  await loadFriends();
+  await runSearch();
+};
+async function refreshAll() { await loadFriends(); await runSearch(); }
+
+async function sendRequest(userId) {
+  const { error } = await db.from('friendships').insert({ requester: me.id, addressee: userId });
+  if (error) homeSay(error.code === '23505' ? '已经申请过，或你们已经是好友' : '发送失败：' + error.message);
+  else homeSay('好友申请已发送', true);
+  await refreshAll();
+}
+async function acceptRequest(id) {
+  const { error } = await db.from('friendships').update({ status: 'accepted' }).eq('id', id);
+  if (error) homeSay('操作失败：' + error.message); else homeSay('已添加为好友', true);
+  await refreshAll();
+}
+async function removeFriendship(id) {
+  const { error } = await db.from('friendships').delete().eq('id', id);
+  if (error) homeSay('操作失败：' + error.message); else homeSay('已完成', true);
+  await refreshAll();
+}
+
+// ================= 聊天列表 =================
+async function loadConvs() {
+  if (!me) return;
+  const [r1, r2] = await Promise.all([
+    db.from('conversations').select('id,type,name,created_at'),
+    db.from('conversation_members').select('conversation_id,user_id')
+  ]);
+  if (r1.error || r2.error) return homeSay('加载聊天失败：' + (r1.error || r2.error).message);
+  const need = [...new Set(r2.data.map(m => m.user_id))].filter(id => !names[id]);
+  if (need.length) {
+    const { data: ps } = await db.from('profiles').select('id,username').in('id', need);
+    (ps || []).forEach(p => { names[p.id] = p.username; });
+  }
+  convs = {};
+  for (const c of r1.data) {
+    const members = r2.data.filter(m => m.conversation_id === c.id).map(m => m.user_id);
+    let title = c.name;
+    if (c.type === 'dm') title = names[members.find(id => id !== me.id)] || '（未知用户）';
+    convs[c.id] = { ...c, members, title, order: lastAt[c.id] || c.created_at };
+  }
+  renderConvList();
+}
+
+function renderConvList() {
+  const ul = $('convList');
+  ul.innerHTML = '';
+  const list = Object.values(convs).sort((a, b) => (a.order < b.order ? 1 : -1));
+  if (!list.length) return addEmpty(ul, '还没有聊天。去"好友"里点"发消息"，或新建群聊');
+  for (const c of list) {
+    const li = document.createElement('li');
+    li.className = 'conv';
+    const left = document.createElement('span');
+    left.textContent = c.title;
+    const sub = document.createElement('span');
+    sub.className = 'sub';
+    sub.textContent = c.type === 'group' ? `群聊 · ${c.members.length}人` : '私聊';
+    left.append(sub);
+    li.append(left);
+    if (unread[c.id]) {
+      const b = document.createElement('span');
+      b.className = 'badge';
+      b.textContent = unread[c.id];
+      li.append(b);
+    }
+    li.onclick = () => openConv(c.id);
+    ul.append(li);
+  }
+}
+
+// ================= 新建私聊 / 群聊 =================
+async function startDm(friendId) {
+  const { data, error } = await db.rpc('create_dm', { friend: friendId });
+  if (error) return homeSay('创建私聊失败：' + error.message);
+  await loadConvs();
+  openConv(data);
+}
+
+$('newGroupBtn').onclick = () => {
+  const box = $('groupFriends');
+  box.innerHTML = '';
+  if (!friendList.length) {
+    addEmpty(box, '你还没有好友，先去"好友"里添加');
+  } else {
+    for (const f of friendList) {
+      const l = document.createElement('label');
+      l.className = 'pick';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = f.id;
+      l.append(cb, f.name);
+      box.append(l);
+    }
+  }
+  $('groupName').value = '';
+  $('groupBox').hidden = false;
+};
+$('groupCancel').onclick = () => { $('groupBox').hidden = true; };
+$('groupCreate').onclick = async () => {
+  const name = $('groupName').value.trim();
+  const ids = [...$('groupFriends').querySelectorAll('input:checked')].map(i => i.value);
+  if (!name) return homeSay('请填写群名称');
+  if (!ids.length) return homeSay('请至少选择一位好友');
+  const btn = $('groupCreate');
+  btn.disabled = true;
+  const { data, error } = await db.rpc('create_group', { group_name: name, member_ids: ids });
+  btn.disabled = false;
+  if (error) return homeSay('创建群聊失败：' + error.message);
+  $('groupBox').hidden = true;
+  homeSay('群聊已创建', true);
+  await loadConvs();
+  openConv(data);
+};
+
+// ================= 聊天窗口 =================
+const PAGE = 50;            // 每次加载多少条
+const AROUND_BEFORE = 30;   // 跳转到某条消息时，往前加载多少条
+const AROUND_AFTER = 200;   // 往后最多加载多少条
+const MSG_COLS = 'id,sender_id,body,created_at';
+let chatData = [];          // 当前窗口里已加载的消息（按时间从旧到新）
+let chatIds = new Set();
+let hasOlder = false;       // 前面是否还有更早的消息
+let hasNewer = false;       // 后面是否还有更新的消息（只在"跳转到历史"时才会出现）
+
+const byTime = (a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0);
+function mergeRows(rows) {
+  for (const r of rows) if (!chatIds.has(r.id)) { chatIds.add(r.id); chatData.push(r); }
+  chatData.sort(byTime);
+}
+function chatNote(text) { $('chatNote').textContent = text || ''; }
+
+// 打开聊天；传入 target 时，直接跳到那条消息
+async function openConv(id, target) {
+  const c = convs[id];
+  if (!c) return;
+  openId = id;
+  unread[id] = 0;
+  chatData = []; chatIds = new Set(); hasOlder = false; hasNewer = false;
+  $('chatTitle').textContent = c.type === 'group' ? `${c.title}（${c.members.length}人）` : c.title;
+  $('chatMsgs').innerHTML = '';
+  chatNote('');
+  closeChatSearch();
+  showViews();
+  let rows = [];
+  if (!target) {
+    const { data, error } = await db.from('messages').select(MSG_COLS)
+      .eq('conversation_id', id).order('created_at', { ascending: false }).limit(PAGE);
+    if (openId !== id) return;
+    if (error) chatNote('加载消息失败：' + error.message);
+    rows = [...(data || [])].reverse();
+    hasOlder = (data || []).length === PAGE;
+  } else {
+    const [b, a] = await Promise.all([
+      db.from('messages').select(MSG_COLS).eq('conversation_id', id)
+        .lte('created_at', target.created_at).order('created_at', { ascending: false }).limit(AROUND_BEFORE),
+      db.from('messages').select(MSG_COLS).eq('conversation_id', id)
+        .gt('created_at', target.created_at).order('created_at', { ascending: true }).limit(AROUND_AFTER)
+    ]);
+    if (openId !== id) return;
+    if (b.error || a.error) chatNote('加载消息失败：' + (b.error || a.error).message);
+    const before = b.data || [], after = a.data || [];
+    rows = [...before].reverse().concat(after);
+    hasOlder = before.length === AROUND_BEFORE;
+    hasNewer = after.length === AROUND_AFTER;
+  }
+  mergeRows(rows);
+  renderChat(target ? 'target' : 'bottom', target && target.id);
+  if (!target) $('chatInput').focus();
+}
+
+function makeBtn(text, fn) {
+  const b = document.createElement('button');
+  b.className = 'small more';
+  b.type = 'button';
+  b.textContent = text;
+  b.onclick = async () => { b.disabled = true; await fn(); };
+  return b;
+}
+
+// 把 chatData 画到屏幕上。mode 决定画完后滚动到哪里
+function renderChat(mode, targetId) {
+  const box = $('chatMsgs');
+  const prevH = box.scrollHeight, prevTop = box.scrollTop;
+  const nearBottom = prevH - prevTop - box.clientHeight < 80;
+  box.innerHTML = '';
+  if (hasOlder) box.append(makeBtn('加载更早的消息', loadOlder));
+  const isGroup = convs[openId] && convs[openId].type === 'group';
+  let day = '';
+  for (const m of chatData) {
+    const d = new Date(m.created_at);
+    const ds = d.toLocaleDateString();
+    if (ds !== day) {
+      day = ds;
+      const s = document.createElement('div');
+      s.className = 'day';
+      s.textContent = ds;
+      box.append(s);
+    }
+    const mine = m.sender_id === me.id;
+    const wrap = document.createElement('div');
+    wrap.className = 'msg' + (mine ? ' mine' : '');
+    wrap.dataset.id = m.id;
+    if (!mine && isGroup) {
+      const who = document.createElement('div');
+      who.className = 'who';
+      who.textContent = names[m.sender_id] || '…';
+      wrap.append(who);
+    }
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    b.textContent = m.body;
+    const tm = document.createElement('div');
+    tm.className = 'time';
+    tm.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    wrap.append(b, tm);
+    box.append(wrap);
+  }
+  if (hasNewer) box.append(makeBtn('加载更新的消息', loadNewer));
+
+  if (mode === 'bottom') box.scrollTop = box.scrollHeight;
+  else if (mode === 'keep') box.scrollTop = box.scrollHeight - prevH + prevTop;   // 在前面插入内容时，保持当前位置不动
+  else if (mode === 'same') box.scrollTop = prevTop;
+  else if (mode === 'stick') box.scrollTop = nearBottom ? box.scrollHeight : prevTop;
+  else if (mode === 'target') {
+    const el = box.querySelector(`[data-id="${CSS.escape(targetId)}"]`);
+    if (el) {
+      el.scrollIntoView({ block: 'center' });
+      el.classList.add('flash');
+      setTimeout(() => el.classList.remove('flash'), 1800);
+    }
+  }
+}
+
+async function loadOlder() {
+  const first = chatData[0], id = openId;
+  if (!first || !id) return;
+  const { data, error } = await db.from('messages').select(MSG_COLS).eq('conversation_id', id)
+    .lt('created_at', first.created_at).order('created_at', { ascending: false }).limit(PAGE);
+  if (openId !== id) return;
+  if (error) { chatNote('加载失败：' + error.message); renderChat('same'); return; }
+  hasOlder = data.length === PAGE;
+  mergeRows(data);
+  renderChat('keep');
+}
+async function loadNewer() {
+  const last = chatData[chatData.length - 1], id = openId;
+  if (!last || !id) return;
+  const { data, error } = await db.from('messages').select(MSG_COLS).eq('conversation_id', id)
+    .gt('created_at', last.created_at).order('created_at', { ascending: true }).limit(PAGE);
+  if (openId !== id) return;
+  if (error) { chatNote('加载失败：' + error.message); renderChat('same'); return; }
+  hasNewer = data.length === PAGE;
+  mergeRows(data);
+  renderChat('same');
+}
+
+$('backBtn').onclick = () => { openId = null; closeChatSearch(); showViews(); renderConvList(); };
+
+$('chatForm').onsubmit = async e => {
+  e.preventDefault();
+  const body = $('chatInput').value.trim();
+  if (!body || !openId) return;
+  const id = openId;
+  const btn = $('chatSend');
+  btn.disabled = true;
+  chatNote('');
+  if (hasNewer) await openConv(id);     // 正在看历史消息时发送，先回到最新
+  const { data, error } = await db.from('messages')
+    .insert({ conversation_id: id, sender_id: me.id, body })
+    .select(MSG_COLS).single();
+  btn.disabled = false;
+  if (error) { chatNote('发送失败：' + error.message); return; }
+  $('chatInput').value = '';
+  $('chatInput').focus();
+  lastAt[id] = data.created_at;
+  if (convs[id]) convs[id].order = data.created_at;
+  if (openId === id) { mergeRows([data]); renderChat('bottom'); }
+  renderConvList();
+};
+
+// ================= 搜索历史消息 =================
+async function searchMessages(kw, convId) {
+  const pattern = '%' + kw.replace(/[\\%_]/g, '\\$&') + '%';
+  let q = db.from('messages').select('id,conversation_id,sender_id,body,created_at')
+    .ilike('body', pattern).order('created_at', { ascending: false }).limit(50);
+  if (convId) q = q.eq('conversation_id', convId);
+  return await q;
+}
+
+// 把关键词加粗显示
+function fillHighlight(el, text, kw) {
+  const lower = text.toLowerCase(), k = kw.toLowerCase();
+  let i = 0;
+  while (true) {
+    const j = lower.indexOf(k, i);
+    if (j < 0) { el.append(text.slice(i)); break; }
+    el.append(text.slice(i, j));
+    const b = document.createElement('b');
+    b.textContent = text.slice(j, j + kw.length);
+    el.append(b);
+    i = j + kw.length;
+  }
+}
+function makeSnippet(body, kw) {
+  const j = body.toLowerCase().indexOf(kw.toLowerCase());
+  if (j < 0 || body.length <= 90) return body;
+  const s = Math.max(0, j - 30), e = Math.min(body.length, j + kw.length + 60);
+  return (s > 0 ? '…' : '') + body.slice(s, e) + (e < body.length ? '…' : '');
+}
+function renderHits(ul, rows, kw, showConv, onPick) {
+  ul.innerHTML = '';
+  if (!rows.length) return addEmpty(ul, '没有找到相关消息');
+  for (const m of rows) {
+    const li = document.createElement('li');
+    li.className = 'hit';
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const who = m.sender_id === me.id ? '我' : (names[m.sender_id] || '…');
+    const when = new Date(m.created_at).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    meta.textContent = (showConv ? ((convs[m.conversation_id] ? convs[m.conversation_id].title : '聊天') + ' · ') : '') + who + ' · ' + when;
+    const snip = document.createElement('div');
+    snip.className = 'snip';
+    fillHighlight(snip, makeSnippet(m.body, kw), kw);
+    li.append(meta, snip);
+    li.onclick = () => onPick(m);
+    ul.append(li);
+  }
+  if (rows.length === 50) addEmpty(ul, '只显示最近 50 条，可以换更具体的关键词');
+}
+
+// 聊天列表页：搜索所有聊天
+$('msgSearchForm').onsubmit = async e => {
+  e.preventDefault();
+  const kw = $('mq').value.trim();
+  if (!kw) { $('clearHits').click(); return; }
+  const { data, error } = await searchMessages(kw);
+  if (error) return homeSay('搜索失败：' + error.message);
+  homeSay('');
+  renderHits($('msgHits'), data, kw, true, m => openConv(m.conversation_id, m));
+  $('clearHits').hidden = false;
+};
+$('clearHits').onclick = () => {
+  $('msgHits').innerHTML = '';
+  $('mq').value = '';
+  $('clearHits').hidden = true;
+};
+
+// 聊天窗口内：只搜索当前聊天
+function closeChatSearch() {
+  $('chatSearch').hidden = true;
+  $('cq').value = '';
+  $('chatHits').innerHTML = '';
+}
+$('chatSearchBtn').onclick = () => {
+  const panel = $('chatSearch');
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) $('cq').focus();
+};
+$('chatSearchForm').onsubmit = async e => {
+  e.preventDefault();
+  const kw = $('cq').value.trim(), id = openId;
+  if (!kw || !id) return;
+  const { data, error } = await searchMessages(kw, id);
+  if (error) { chatNote('搜索失败：' + error.message); return; }
+  renderHits($('chatHits'), data, kw, false, m => { closeChatSearch(); openConv(id, m); });
+};
+
+// ================= 实时：别人发来的消息会自动出现 =================
+function startRealtime() {
+  if (rt || !me) return;
+  rt = db.channel('horizon-' + me.id)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, p => onNewMessage(p.new))
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversation_members', filter: 'user_id=eq.' + me.id }, () => loadConvs())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () => refreshAll())
+    .subscribe();
+}
+function stopRealtime() {
+  if (rt) { db.removeChannel(rt); rt = null; }
+}
+async function onNewMessage(m) {
+  const cid = m.conversation_id;
+  if (!convs[cid]) {            // 新聊天，先刷新列表
+    await loadConvs();
+    if (convs[cid] && m.sender_id !== me.id && openId !== cid) { unread[cid] = (unread[cid] || 0) + 1; renderConvList(); }
+    return;
+  }
+  lastAt[cid] = m.created_at;
+  convs[cid].order = m.created_at;
+  if (openId === cid) {
+    // 正在看历史消息（后面还有没加载的）时，不把新消息硬插进来，等用户点"加载更新的消息"
+    if (!hasNewer) { mergeRows([m]); renderChat(m.sender_id === me.id ? 'bottom' : 'stick'); }
+  } else if (m.sender_id !== me.id) {
+    unread[cid] = (unread[cid] || 0) + 1;
+  }
+  renderConvList();
+}
+</script>
+</body>
+</html>
