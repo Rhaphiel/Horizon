@@ -68,10 +68,24 @@
   .msg.flash .bubble { outline: 2px solid #111; outline-offset: 2px; }
   #chatSearch { padding: 12px 20px; border-bottom: 1px solid #e6e6e6; }
   #chatHits { max-height: 40vh; overflow-y: auto; }
+  /* ===== v0.2 消息弹窗提醒 ===== */
+  .notifyWrap { position: fixed; left: 0; right: 0; top: 0; z-index: 99; display: flex; flex-direction: column; gap: 8px; padding: calc(10px + env(safe-area-inset-top)) 12px 0; pointer-events: none; }
+  .notify { pointer-events: auto; display: flex; gap: 10px; align-items: flex-start; background: #111; color: #fff; border-radius: 10px; padding: 10px 14px; box-shadow: 0 8px 28px rgba(0,0,0,.28); animation: nIn .18s ease-out; cursor: pointer; }
+  .notify .n-body { flex: 1; min-width: 0; }
+  .notify .n-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .notify .n-text { font-size: 13px; opacity: .82; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .notify .n-x { background: none; border: 0; color: #fff; opacity: .55; font-size: 18px; line-height: 1; padding: 0 2px; cursor: pointer; }
+  .notify.out { animation: nOut .18s ease-in forwards; }
+  @keyframes nIn { from { transform: translateY(-14px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes nOut { to { transform: translateY(-14px); opacity: 0; } }
+
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
+
+<!-- v0.2 消息弹窗提醒的容器 -->
+<div class="notifyWrap" id="notifyWrap"></div>
 
 <!-- 登录 / 注册 -->
 <main id="authView" hidden>
@@ -98,7 +112,7 @@
 <!-- 主页：聊天列表 / 好友 -->
 <main id="homeView" hidden>
   <h1>Horizon</h1>
-  <p>你好，<b id="whoami"></b><button class="link" id="logoutBtn">退出登录</button></p>
+  <p>你好，<b id="whoami"></b><button class="link" id="notifyBtn">🔔 通知：开</button><button class="link" id="logoutBtn">退出登录</button></p>
 
   <div class="tabs">
     <button id="tabChats" class="on">聊天</button>
@@ -423,6 +437,7 @@ function renderConvList() {
     li.onclick = () => openConv(c.id);
     ul.append(li);
   }
+  syncTitle();
 }
 
 // ================= 新建私聊 / 群聊 =================
@@ -492,6 +507,7 @@ async function openConv(id, target) {
   if (!c) return;
   openId = id;
   unread[id] = 0;
+  syncTitle();
   chatData = []; chatIds = new Set(); hasOlder = false; hasNewer = false;
   $('chatTitle').textContent = c.type === 'group' ? `${c.title}（${c.members.length}人）` : c.title;
   $('chatMsgs').innerHTML = '';
@@ -722,6 +738,67 @@ $('chatSearchForm').onsubmit = async e => {
   renderHits($('chatHits'), data, kw, false, m => { closeChatSearch(); openConv(id, m); });
 };
 
+// ================= v0.2 消息弹窗提醒 =================
+const NOTIFY_KEY = 'horizon:notify';
+let notifyOn = localStorage.getItem(NOTIFY_KEY) !== '0';
+const notifyWrap = $('notifyWrap');
+const notifyAt = {};          // 聊天id -> 上次弹窗时间（同聊天节流）
+
+function setNotify(on) {
+  notifyOn = !!on;
+  localStorage.setItem(NOTIFY_KEY, notifyOn ? '1' : '0');
+  const b = $('notifyBtn');
+  if (b) { b.textContent = notifyOn ? '🔔 通知：开' : '🔕 通知：关'; b.style.opacity = notifyOn ? '' : '.5'; }
+}
+$('notifyBtn').onclick = () => setNotify(!notifyOn);
+setNotify(notifyOn);
+
+// 页面标题同步未读数：切到后台时，任务栏也能看到
+function syncTitle() {
+  const n = Object.values(unread).reduce((a, b) => a + b, 0);
+  document.title = n ? `(${n}) Horizon` : 'Horizon';
+}
+
+// 弹一条提醒；同一聊天 1.5 秒内只弹一次，最多同时 3 条
+function pushNotify(m) {
+  if (!notifyOn || !me || !m || m.sender_id === me.id) return;
+  const cid = m.conversation_id;
+  const now = Date.now();
+  if (notifyAt[cid] && now - notifyAt[cid] < 1500) return;
+  notifyAt[cid] = now;
+
+  const c = convs[cid];
+  const isGroup = c && c.type === 'group';
+  const who = names[m.sender_id] || '某人';
+  const title = isGroup ? `${c.title} · ${who}` : who;
+  const text = (m.body || '').replace(/\s+/g, ' ').trim() || '（空消息）';
+
+  const el = document.createElement('div');
+  el.className = 'notify';
+  const body = document.createElement('div');
+  body.className = 'n-body';
+  const t = document.createElement('div'); t.className = 'n-title'; t.textContent = title;
+  const x = document.createElement('div'); x.className = 'n-text'; x.textContent = text;
+  body.append(t, x);
+
+  const close = document.createElement('button');
+  close.className = 'n-x'; close.type = 'button'; close.textContent = '×';
+  close.onclick = ev => { ev.stopPropagation(); remove(); };
+
+  el.append(body, close);
+  el.onclick = () => { remove(); openConv(cid); };
+  notifyWrap.append(el);
+  while (notifyWrap.children.length > 3) notifyWrap.firstElementChild.remove();
+
+  let timer = setTimeout(remove, 5000);
+  function remove() {
+    clearTimeout(timer);
+    if (!el.isConnected) return;
+    el.classList.add('out');
+    setTimeout(() => el.remove(), 200);
+  }
+}
+
 // ================= 实时：别人发来的消息会自动出现 =================
 function startRealtime() {
   if (rt || !me) return;
@@ -738,7 +815,11 @@ async function onNewMessage(m) {
   const cid = m.conversation_id;
   if (!convs[cid]) {            // 新聊天，先刷新列表
     await loadConvs();
-    if (convs[cid] && m.sender_id !== me.id && openId !== cid) { unread[cid] = (unread[cid] || 0) + 1; renderConvList(); }
+    if (convs[cid] && m.sender_id !== me.id && openId !== cid) {
+      unread[cid] = (unread[cid] || 0) + 1;
+      pushNotify(m);            // v0.2：弹窗
+      renderConvList();
+    }
     return;
   }
   lastAt[cid] = m.created_at;
@@ -748,6 +829,7 @@ async function onNewMessage(m) {
     if (!hasNewer) { mergeRows([m]); renderChat(m.sender_id === me.id ? 'bottom' : 'stick'); }
   } else if (m.sender_id !== me.id) {
     unread[cid] = (unread[cid] || 0) + 1;
+    pushNotify(m);              // v0.2：弹窗
   }
   renderConvList();
 }
