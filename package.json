@@ -1,6 +1,6 @@
 {
   "name": "horizon",
-  "version": "0.2.1",
+  "version": "0.2.0",
   "private": true,
   "dependencies": {
     "@capacitor/android": "^8.0.0",
