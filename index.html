@@ -112,7 +112,7 @@
 <!-- 主页：聊天列表 / 好友 -->
 <main id="homeView" hidden>
   <h1>Horizon</h1>
-  <p>你好，<b id="whoami"></b><button class="link" id="notifyBtn">🔔 通知：开</button><button class="link" id="logoutBtn">退出登录</button></p>
+  <p>你好，<b id="whoami"></b><button class="link" id="notifyBtn">通知：开</button><button class="link" id="logoutBtn">退出登录</button></p>
 
   <div class="tabs">
     <button id="tabChats" class="on">聊天</button>
@@ -173,6 +173,7 @@
 
 <!-- 优先用本地的 supabase.js（打包成 APK 时会放进去）；找不到时自动改用网络版 -->
 <script src="supabase.js"></script>
+<script src="native-plugins.js"></script>
 <script>if (!window.supabase) document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>');</script>
 <script>
 // ============ 你的 Supabase 信息 ============
@@ -279,14 +280,17 @@ async function render(session) {
   if (data && data.username) { $('whoami').textContent = data.username; names[me.id] = data.username; }
   else if (!meta) $('whoami').textContent = me.email;
   startRealtime();
-  ensureSystemNotify();     // v0.2.1：登录后申请通知权限、建通知渠道
+  ensureSystemNotify().then(() => {
+    if (pushToken && notifyOn) savePushToken(pushToken);
+    ensureRemotePush();
+  }); // 本地通知渠道就绪后，再注册 FCM
   loadFriends();
   loadConvs();
 }
 // 注意：回调里不要直接请求数据库，用 setTimeout 延后一下
 db.auth.onAuthStateChange((_event, session) => { setTimeout(() => render(session), 0); });
 db.auth.getSession().then(({ data }) => render(data.session));
-$('logoutBtn').onclick = () => db.auth.signOut();
+$('logoutBtn').onclick = () => logoutAndRemovePushToken();
 
 // ================= 好友 =================
 function homeSay(text, ok = false) {
@@ -412,6 +416,11 @@ async function loadConvs() {
     convs[c.id] = { ...c, members, title, order: lastAt[c.id] || c.created_at };
   }
   renderConvList();
+  if (pendingNotificationCid && convs[pendingNotificationCid]) {
+    const cid = pendingNotificationCid;
+    pendingNotificationCid = null;
+    openConv(cid);
+  }
 }
 
 function renderConvList() {
@@ -750,7 +759,17 @@ function setNotify(on) {
   notifyOn = !!on;
   localStorage.setItem(NOTIFY_KEY, notifyOn ? '1' : '0');
   const b = $('notifyBtn');
-  if (b) { b.textContent = notifyOn ? '🔔 通知：开' : '🔕 通知：关'; b.style.opacity = notifyOn ? '' : '.5'; }
+  if (b) { b.textContent = notifyOn ? '通知：开' : '通知：关'; b.style.opacity = notifyOn ? '' : '.5'; }
+  if (me) {
+    if (notifyOn) {
+      ensureSystemNotify().then(() => {
+        if (pushToken) savePushToken(pushToken);
+        ensureRemotePush();
+      });
+    } else {
+      removeCurrentPushToken();
+    }
+  }
 }
 $('notifyBtn').onclick = () => setNotify(!notifyOn);
 setNotify(notifyOn);
@@ -759,9 +778,115 @@ setNotify(notifyOn);
 // 通过 Capacitor LocalNotifications 插件调用安卓原生通知。
 // 普通浏览器里拿不到插件，LN 为 null，会自动退回应用内弹窗。
 const Cap = window.Capacitor;
-const LN = (Cap && Cap.Plugins && Cap.Plugins.LocalNotifications) || null;
-let lnReady = false;   // 插件存在且已授权
+const NativePlugins = window.HorizonNativePlugins || {};
+// Capacitor 8：通过 npm 包注册插件；保留旧全局注册表作为兼容回退。
+const LN = NativePlugins.LocalNotifications ||
+  (Cap && Cap.Plugins && Cap.Plugins.LocalNotifications) || null;
+// Capacitor Push Notifications：后台/进程被系统回收时由 FCM 送达。
+const PN = NativePlugins.PushNotifications ||
+  (Cap && Cap.Plugins && Cap.Plugins.PushNotifications) || null;
+let lnReady = false;   // 本地通知插件存在且已授权
 let lnInit = false;
+let pushListenersInstalled = false;
+let pushRegistering = false;
+let pushToken = null;              // 当前设备 FCM Token
+let remotePushRegistered = false;  // Token 已取得；后台通知交由 FCM，避免与本地通知重复
+let pendingNotificationCid = null;
+
+
+// ================= 后台推送（FCM）=================
+// Token 只保存在当前登录用户自己的 push_tokens 行中。
+// 服务账号私钥和 Supabase service_role key 绝不进入 APK。
+function installPushListeners() {
+  if (!PN || pushListenersInstalled) return;
+  pushListenersInstalled = true;
+
+  PN.addListener('registration', async token => {
+    pushToken = token && token.value ? token.value : null;
+    remotePushRegistered = !!pushToken;
+    if (pushToken) await savePushToken(pushToken);
+  });
+
+  PN.addListener('registrationError', error => {
+    remotePushRegistered = false;
+    console.warn('FCM 注册失败：', error);
+  });
+
+  // 前台消息仍由 Supabase Realtime -> onNewMessage() 更新界面，
+  // 这里不再额外弹系统通知，避免同一条消息出现两次。
+  PN.addListener('pushNotificationReceived', notification => {
+    console.debug('收到前台 FCM 消息：', notification);
+  });
+
+  PN.addListener('pushNotificationActionPerformed', action => {
+    const data = action && action.notification && action.notification.data
+      ? action.notification.data : {};
+    routeToNotificationConversation(data.cid || data.conversation_id);
+  });
+}
+
+async function savePushToken(token) {
+  if (!token || !me || !notifyOn) return;
+  const row = {
+    user_id: me.id,
+    provider: 'fcm',
+    token,
+    platform: 'android',
+    device_name: 'Horizon Android',
+    updated_at: new Date().toISOString()
+  };
+  const { error } = await db.from('push_tokens')
+    .upsert(row, { onConflict: 'user_id,provider,token' });
+  if (error) console.warn('保存 FCM Token 失败：', error.message);
+}
+
+async function ensureRemotePush() {
+  if (!PN || !me || !notifyOn || pushRegistering) return;
+  installPushListeners();
+  pushRegistering = true;
+  try {
+    let permission = await PN.checkPermissions();
+    if (permission.receive !== 'granted') {
+      permission = await PN.requestPermissions();
+    }
+    if (permission.receive !== 'granted') {
+      console.warn('用户未授予远程通知权限');
+      return;
+    }
+    await PN.register();
+  } catch (error) {
+    console.warn('FCM 初始化失败：', error);
+  } finally {
+    pushRegistering = false;
+  }
+}
+
+async function removeCurrentPushToken() {
+  if (me && pushToken) {
+    const { error } = await db.from('push_tokens')
+      .delete().eq('user_id', me.id).eq('token', pushToken);
+    if (error) console.warn('删除设备 Token 失败：', error.message);
+  }
+  remotePushRegistered = false;
+}
+
+async function logoutAndRemovePushToken() {
+  await removeCurrentPushToken();
+  pushToken = null;
+  await db.auth.signOut();
+}
+
+function routeToNotificationConversation(cid) {
+  if (!cid) return;
+  pendingNotificationCid = cid;
+  if (!me) return; // 冷启动时先等 Supabase 恢复登录态
+  if (convs[cid]) {
+    pendingNotificationCid = null;
+    openConv(cid);
+  } else {
+    loadConvs(); // loadConvs 完成后会处理 pendingNotificationCid
+  }
+}
 
 async function ensureSystemNotify() {
   if (!LN || lnInit) return;
@@ -785,8 +910,7 @@ async function ensureSystemNotify() {
     // 点击通知 → 直接进对应聊天
     LN.addListener('localNotificationActionPerformed', ev => {
       const cid = ev && ev.notification && ev.notification.extra && ev.notification.extra.cid;
-      if (cid && convs[cid]) openConv(cid);
-      else ensureSystemNotify();
+      if (cid) routeToNotificationConversation(cid);
     });
 
     lnReady = true;
@@ -843,7 +967,11 @@ function syncTitle() {
 // 新消息提醒：前台用应用内弹窗，后台用系统通知
 function pushNotify(m) {
   if (!notifyOn || !me || !m || m.sender_id === me.id) return;
-  if (document.hidden) { systemNotify(m); return; }   // App 在后台 → 系统通知（锁屏/横幅）
+  if (document.hidden) {
+    // 已注册 FCM 时，后台系统通知由 FCM 自动展示；避免 Realtime 再弹一条本地通知。
+    if (!remotePushRegistered) systemNotify(m);
+    return;
+  }
   showInAppToast(m);
 }
 
