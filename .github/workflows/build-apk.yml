@@ -38,6 +38,14 @@ jobs:
       - name: Copy supabase library into the app
         run: cp node_modules/@supabase/supabase-js/dist/umd/supabase.js www/supabase.js
 
+      # 把版本号注入前端：index.html 里的 __APP_VERSION__ 占位符 → package.json 的 version
+      - name: Inject app version into web assets
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          sed -i "s/__APP_VERSION__/$VER/g" www/index.html
+          echo "前端版本号：$VER"
+          grep -n "const APP_VERSION" www/index.html | head -2
+
       # 静态 HTML 项目没有 Vite/Webpack；用 esbuild 将 Capacitor 8 插件 JS 包装成普通脚本。
       - name: Bundle Capacitor native plugin bridges
         run: npx esbuild native-plugins-entry.js --bundle --format=iife --outfile=www/native-plugins.js
@@ -71,6 +79,19 @@ jobs:
             perl -0pi -e 's#(<uses-permission android:name="android.permission.INTERNET" />)#$1\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />#' "$MAN"
           fi
           grep -n 'uses-permission' "$MAN"
+
+      # 版本号以 package.json 为唯一来源：
+      #   0.2.0 -> versionName "0.2.0"，versionCode 200
+      # 每次发版只改 package.json，不用碰 android/ 目录（它每次构建都会重建）
+      - name: Set app version from package.json
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          CODE=$(node -p "const v=require('./package.json').version.split('.').map(Number); v[0]*10000+(v[1]||0)*100+(v[2]||0)")
+          APP=android/app/build.gradle
+          sed -i -E "s/versionCode [0-9]+/versionCode $CODE/" "$APP"
+          sed -i -E "s/versionName \"[^\"]*\"/versionName \"$VER\"/" "$APP"
+          echo "版本已写入：versionName=$VER  versionCode=$CODE"
+          grep -nE 'versionCode|versionName' "$APP"
 
       - name: Sync web assets
         run: npx cap sync android
