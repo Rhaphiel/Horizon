@@ -5,9 +5,15 @@ on:
   push:
     branches: [main]      # 每次更新 main 分支也会自动运行
 
+# 新的构建开始时，自动取消还没跑完的旧构建
+concurrency:
+  group: build-apk
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 40     # 超过 40 分钟自动停止，避免一直卡住
     steps:
       - uses: actions/checkout@v4
 
@@ -21,7 +27,15 @@ jobs:
           java-version: 21
 
       - name: Install dependencies
-        run: npm install
+        timeout-minutes: 8   # 正常只需几十秒，卡住就尽早失败
+        run: npm install --no-audit --no-fund --loglevel=http
+
+      - name: Prepare web files
+        run: |
+          mkdir -p www
+          if [ -f index.html ] && [ ! -f www/index.html ]; then mv index.html www/index.html; fi
+          echo "Files in repo:"; ls -la . www
+          test -f www/index.html || { echo "ERROR: index.html not found in the repo"; exit 1; }
 
       - name: Copy supabase library into the app
         run: cp node_modules/@supabase/supabase-js/dist/umd/supabase.js www/supabase.js
