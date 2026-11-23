@@ -7,9 +7,9 @@ export type Database = {
   public: {
     Tables: {
       profiles: {
-        Row: { id: string; username: string; created_at: string };
-        Insert: { id: string; username: string; created_at?: string };
-        Update: { id?: string; username?: string; created_at?: string };
+        Row: { id: string; username: string; avatar_url: string | null; created_at: string };
+        Insert: { id: string; username: string; avatar_url?: string | null; created_at?: string };
+        Update: { id?: string; username?: string; avatar_url?: string | null; created_at?: string };
         Relationships: [];
       };
       friendships: {
@@ -19,9 +19,9 @@ export type Database = {
         Relationships: [];
       };
       conversations: {
-        Row: { id: string; type: 'dm' | 'group'; name: string | null; created_by: string; created_at: string };
-        Insert: { id?: string; type: 'dm' | 'group'; name?: string | null; created_by: string; created_at?: string };
-        Update: { name?: string | null };
+        Row: { id: string; type: 'dm' | 'group'; name: string | null; avatar_url: string | null; created_by: string; created_at: string };
+        Insert: { id?: string; type: 'dm' | 'group'; name?: string | null; avatar_url?: string | null; created_by: string; created_at?: string };
+        Update: { name?: string | null; avatar_url?: string | null };
         Relationships: [];
       };
       conversation_members: {

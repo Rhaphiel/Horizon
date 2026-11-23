@@ -18,7 +18,7 @@ begin
     url := 'https://osbjqvdzmqcztsxbsuyc.supabase.co/functions/v1/push-message',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'x-push-webhook-secret', '2o0C1ihRT6RlBUdx9Dx6GCfBwrJKRW1zutsiPR0Ugvah'
+      'x-push-webhook-secret', 'PASTE_YOUR_WEBHOOK_SECRET_HERE'
     ),
     body := jsonb_build_object(
       'type', 'INSERT',

@@ -3,6 +3,11 @@
     <ion-header>
       <ion-toolbar>
         <ion-title>聊天</ion-title>
+        <ion-buttons slot="end">
+          <ion-button aria-label="新建群聊" @click="groupOpen = true">
+            <ion-icon slot="icon-only" :icon="add" />
+          </ion-button>
+        </ion-buttons>
       </ion-toolbar>
       <ion-toolbar>
         <ion-searchbar
@@ -48,7 +53,7 @@
       <!-- 聊天列表 -->
       <ion-list v-if="sortedChats.length">
         <ion-item v-for="c in sortedChats" :key="c.id" button :detail="false" lines="none" class="row" @click="openChat(c.id)">
-          <Avatar slot="start" :name="chatTitle(c)" :size="56" />
+          <Avatar slot="start" :name="chatTitle(c)" :size="56" :src="chatAvatar(c)" />
           <ion-label>
             <h2>{{ chatTitle(c) }}</h2>
             <p>{{ preview(c) }}</p>
@@ -59,14 +64,7 @@
           </div>
         </ion-item>
       </ion-list>
-      <div v-else-if="chats.loaded" class="empty-tip">还没有聊天。去“好友”里点“发消息”，或新建群聊。</div>
-
-      <!-- 新建群聊：右下角悬浮按钮（M3 FAB，圆角矩形） -->
-      <ion-fab slot="fixed" vertical="bottom" horizontal="end">
-        <ion-fab-button aria-label="新建群聊" @click="groupOpen = true">
-          <ion-icon :icon="createOutline" />
-        </ion-fab-button>
-      </ion-fab>
+      <div v-else-if="chats.loaded" class="empty-tip">还没有聊天。点右上角 + 新建群聊，或在“好友”里点好友开聊。</div>
 
       <PickFriendsModal
         :open="groupOpen"
@@ -85,14 +83,14 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { IonPage, IonHeader, IonToolbar, IonTitle, IonButton, IonSearchbar, IonContent, IonRefresher, IonRefresherContent, IonList, IonItem, IonLabel, IonFab, IonFabButton, IonIcon } from '@ionic/vue';
-import { createOutline } from 'ionicons/icons';
+import { IonPage, IonHeader, IonToolbar, IonTitle, IonButton, IonButtons, IonSearchbar, IonContent, IonRefresher, IonRefresherContent, IonList, IonItem, IonLabel, IonIcon } from '@ionic/vue';
+import { add } from 'ionicons/icons';
 import Avatar from '@/components/Avatar.vue';
 import PickFriendsModal from '@/components/PickFriendsModal.vue';
 import { chats, sortedChats, chatTitle, getChat, loadChats } from '@/stores/chats';
 import type { Chat } from '@/stores/chats';
 import { friendState, loadFriends } from '@/stores/friends';
-import { nameOf } from '@/stores/directory';
+import { nameOf, avatarOf } from '@/stores/directory';
 import { myId } from '@/stores/session';
 import { fmtDateTime, fmtTime, fmtDay, highlightParts, makeSnippet, oneLine } from '@/lib/format';
 import { showToast } from '@/lib/toast';
@@ -109,6 +107,13 @@ const creating = ref(false);
 
 function openChat(id: string): void {
   goChat(id);
+}
+
+// 群聊用群头像；私聊用对方的头像（没有就用名字首字）
+function chatAvatar(c: Chat): string | null {
+  if (c.type === 'group') return c.avatarUrl;
+  const other = c.members.find(m => m.user_id !== myId());
+  return avatarOf(other?.user_id);
 }
 
 function preview(c: Chat): string {

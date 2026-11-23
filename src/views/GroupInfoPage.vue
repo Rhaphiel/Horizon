@@ -11,6 +11,16 @@
 
     <ion-content>
       <template v-if="chat">
+        <!-- 群头像：群主可以点一下更换 -->
+        <div class="ava-wrap">
+          <button class="ava-btn" type="button" :disabled="uploading || !isOwner" @click="pickAvatar">
+            <Avatar :name="chat.name || '群聊'" :size="96" :src="chat.avatarUrl" />
+          </button>
+          <p class="ava-tip">{{ isOwner ? (uploading ? '上传中…' : '点群头像可更换') : '' }}</p>
+          <input ref="fileEl" type="file" accept="image/jpeg,image/png,image/webp" hidden @change="onAvatarPick" />
+          <AvatarCropper :open="cropOpen" :src="cropSrc" @cancel="closeCrop" @done="onCropped" />
+        </div>
+
         <ion-list>
           <ion-item lines="none">
             <ion-label>
@@ -59,11 +69,14 @@ import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { IonPage, IonHeader, IonToolbar, IonButtons, IonBackButton, IonButton, IonTitle, IonContent, IonList, IonItem, IonLabel, useIonRouter } from '@ionic/vue';
 import PickFriendsModal from '@/components/PickFriendsModal.vue';
-import { chatTitle, getChat, myRole } from '@/stores/chats';
+import Avatar from '@/components/Avatar.vue';
+import AvatarCropper from '@/components/AvatarCropper.vue';
+import { chatTitle, getChat, myRole, loadChats } from '@/stores/chats';
 import { friendState } from '@/stores/friends';
 import { nameOf } from '@/stores/directory';
 import { myId } from '@/stores/session';
 import { confirmDialog, showToast } from '@/lib/toast';
+import { uploadGroupAvatar, isStaticImage } from '@/services/avatarApi';
 import { addMembers, clearConversation, dissolveGroup, leaveGroup, removeMember } from '@/services/chatApi';
 
 const route = useRoute();
@@ -72,6 +85,10 @@ const ionRouter = useIonRouter();
 const cid = ref('');
 const addOpen = ref(false);
 const busy = ref(false);
+const fileEl = ref<HTMLInputElement | null>(null);
+const uploading = ref(false);
+const cropOpen = ref(false);
+const cropSrc = ref('');
 
 const me = computed(() => myId());
 const chat = computed(() => getChat(cid.value));
@@ -86,6 +103,50 @@ const members = computed(() =>
 const candidates = computed(() => friendState.friends.filter(f => !chat.value?.members.some(m => m.user_id === f.id)));
 
 const toChats = (): void => ionRouter.navigate('/tabs/chats', 'root', 'replace');
+
+// ----- 群头像（只有群主能改）-----
+function pickAvatar(): void {
+  if (!isOwner.value) return;
+  fileEl.value?.click();
+}
+
+function closeCrop(): void {
+  cropOpen.value = false;
+  if (cropSrc.value) URL.revokeObjectURL(cropSrc.value);
+  cropSrc.value = '';
+}
+
+// 选文件：先挡掉视频 / GIF，再进圆形裁剪
+function onAvatarPick(e: Event): void {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file || !cid.value) return;
+  if (!isStaticImage(file)) {
+    void showToast('只能选 JPG / PNG / WebP 静态图片（不支持视频和 GIF）');
+    return;
+  }
+  cropSrc.value = URL.createObjectURL(file);
+  cropOpen.value = true;
+}
+
+async function onCropped(blob: Blob): Promise<void> {
+  uploading.value = true;
+  try {
+    const url = await uploadGroupAvatar(cid.value, blob);
+    if (url) {
+      await loadChats();          // 重新拉列表，聊天列表里的头像也会同步
+      void showToast('群头像已更新');
+    } else {
+      void showToast('上传失败，请检查网络或存储权限');
+    }
+  } catch (err) {
+    void showToast(err instanceof Error ? err.message : '上传失败');
+  } finally {
+    uploading.value = false;
+    closeCrop();
+  }
+}
 
 async function onAdd(p: { ids: string[]; name: string }): Promise<void> {
   if (busy.value) return;
@@ -159,4 +220,8 @@ watch(
 <style scoped>
 .tag { margin-left: 8px; font-size: 11px; color: var(--ion-color-medium); border: 1px solid var(--ion-color-medium); padding: 0 6px; }
 .actions { display: flex; flex-direction: column; gap: 8px; }
+.ava-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 20px 0 8px; }
+.ava-btn { background: transparent; border: 0; padding: 0; cursor: pointer; }
+.ava-btn:disabled { cursor: default; }
+.ava-tip { margin: 0; font-size: 12px; color: var(--md-on-surface-variant); min-height: 16px; }
 </style>

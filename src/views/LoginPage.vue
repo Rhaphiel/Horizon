@@ -32,7 +32,7 @@
             fill="outline"
             label="用户名（3–20 位，字母、数字或下划线）"
             label-placement="floating"
-            maxlength="20"
+            :maxlength="20"
             autocomplete="username"
             autocapitalize="off"
           />
@@ -89,7 +89,11 @@ async function loginWithUsername(name: string, pwd: string): Promise<string | nu
     if (status === 404) return '用户名登录功能还没有部署到服务器，请先用邮箱登录（部署方法见 README）';
     if (status === 429) return '尝试太频繁，请稍后再试';
     if (status === 401) return '用户名或密码不正确';
-    if (error.name === 'FunctionsFetchError') return '网络连接失败，请检查网络（是否开了 VPN）';
+    if (error.name === 'FunctionsFetchError') {
+      // 跨域时若服务端函数不存在（404 且无 CORS 头），浏览器会把请求判为“网络错误”，
+      // 所以这里把两种可能都写出来，避免误以为是网络/VPN 问题。
+      return '连不上登录服务：可能是「登录函数尚未部署」，也可能是网络/代理拦截。先用邮箱登录试试，再看 README 的部署章节';
+    }
     return '登录失败，请稍后再试';
   }
   const s = (data as { session?: { access_token?: string; refresh_token?: string } } | null)?.session;

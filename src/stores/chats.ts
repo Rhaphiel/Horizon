@@ -13,6 +13,7 @@ export interface Chat {
   id: string;
   type: 'dm' | 'group';
   name: string | null;
+  avatarUrl: string | null;
   created_by: string;
   created_at: string;
   members: Member[];
@@ -49,7 +50,7 @@ export function myRole(c: Chat): 'owner' | 'member' {
 export async function loadChats(): Promise<string | null> {
   if (!session.user) return null;
   const [c, m, s] = await Promise.all([
-    db.from('conversations').select('id,type,name,created_by,created_at'),
+    db.from('conversations').select('id,type,name,avatar_url,created_by,created_at'),
     db.from('conversation_members').select('conversation_id,user_id,role,joined_at'),
     db.rpc('get_conversation_stats'),
   ]);
@@ -66,6 +67,7 @@ export async function loadChats(): Promise<string | null> {
     const st = stats.get(row.id);
     return {
       ...row,
+      avatarUrl: row.avatar_url ?? null,
       members: memberRows
         .filter(x => x.conversation_id === row.id)
         .map(x => ({ user_id: x.user_id, role: x.role, joined_at: x.joined_at })),

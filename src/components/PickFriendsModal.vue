@@ -18,8 +18,7 @@
         label="群名称"
         label-placement="stacked"
         placeholder="1–30 个字"
-        maxlength="30"
-        class="ion-padding-horizontal"
+        :maxlength="30"        class="ion-padding-horizontal"
       />
       <div class="section-title">选择好友</div>
       <ion-list v-if="friends.length">
