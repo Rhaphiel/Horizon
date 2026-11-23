@@ -1,0 +1,13 @@
+-- 仅供参考：你的线上项目里这个 Database Webhook 已经建好了，不需要再执行。
+-- 作用：messages 表每插入一条新消息，就调用 Edge Function "push-message" 发 FCM 推送。
+-- 注意：真实的密钥不要提交到仓库（本仓库的 .gitignore 已忽略 202611220002_push_trigger.sql）。
+--
+-- create trigger "push-message-on-insert"
+--   after insert on public.messages
+--   for each row execute function supabase_functions.http_request(
+--     'https://osbjqvdzmqcztsxbsuyc.supabase.co/functions/v1/push-message',
+--     'POST',
+--     '{"Content-Type":"application/json","x-push-webhook-secret":"<填你的 PUSH_WEBHOOK_SECRET>"}',
+--     '{}',
+--     '5000'
+--   );
