@@ -1,0 +1,24 @@
+
+# Local Firebase / Huawei / Supabase credentials
+google-services.json
+agconnect-services.json
+service-account*.json
+.env
+.env.*
+!.env.example
+local.properties
+*.jks
+*.keystore
+
+# local deploy artifacts / secrets
+tools/push-secret.txt
+tools/supabase.exe
+service-account.json
+# 含 webhook 密钥的本地触发器 SQL（不要提交）
+supabase/migrations/202611220002_push_trigger.sql
+
+# build output / generated
+node_modules/
+dist/
+android/
+*.apk
