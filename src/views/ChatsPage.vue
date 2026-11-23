@@ -9,10 +9,11 @@
           </ion-button>
         </ion-buttons>
       </ion-toolbar>
-      <ion-toolbar>
+      <ion-toolbar class="search-bar">
         <ion-searchbar
           v-model="kw"
-          placeholder="搜索所有聊天记录"
+          class="pill"
+          placeholder="搜索聊天"
           :debounce="0"
           @keydown="onKey"
           @ionClear="clearSearch"
@@ -179,6 +180,32 @@ async function onCreateGroup(p: { ids: string[]; name: string }): Promise<void> 
 </script>
 
 <style scoped>
+/* 顶部与搜索：去掉灰块/阴影，做成一枚胶囊，页面整体连成一片 */
+ion-header { box-shadow: none; }
+ion-toolbar { --background: var(--md-surface); --border-width: 0; }
+.search-bar { --background: transparent; --border-width: 0; padding-bottom: 2px; }
+ion-searchbar.pill {
+  --background: var(--md-surface-container);
+  --border-radius: 999px;
+  --box-shadow: none;
+  --height: 46px;
+  --icon-color: var(--md-on-surface-variant);
+  --placeholder-color: var(--md-on-surface-variant);
+  --clear-button-color: var(--md-on-surface-variant);
+  --cancel-button-color: var(--md-primary);
+  padding: 0 12px 8px;
+}
+
+/* 「搜索结果 / 全部聊天」和右侧按钮同基线 */
+.section-title { display: flex; align-items: center; gap: 6px; }
+.section-title ion-button {
+  height: 26px;
+  margin: 0;
+  font-size: 13px;
+  --padding-start: 6px;
+  --padding-end: 6px;
+}
+
 .row { --padding-start: 16px; --padding-end: 16px; --min-height: 76px; --background: transparent; }
 .row h2 { font-size: 17px; font-weight: 500; margin: 0 0 2px; }
 .row p { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; }

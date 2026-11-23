@@ -45,10 +45,21 @@
           fill="outline"
           :label="mode === 'login' ? '密码' : '密码（至少 6 位）'"
           label-placement="floating"
-          type="password"
+          :type="showPwd ? 'text' : 'password'"
           :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
           @keyup.enter="submit"
-        />
+        >
+          <!-- 眼睛按钮：看清输错没有 -->
+          <ion-button
+            slot="end"
+            fill="clear"
+            class="eye"
+            :aria-label="showPwd ? '隐藏密码' : '显示密码'"
+            @click="showPwd = !showPwd"
+          >
+            <ion-icon slot="icon-only" :icon="showPwd ? eyeOff : eye" />
+          </ion-button>
+        </ion-input>
 
         <ion-button expand="block" size="large" :disabled="busy" @click="submit">{{ mode === 'login' ? '登录' : '注册' }}</ion-button>
         <p v-if="msg" :class="['msg', { ok: msgOk }]">{{ msg }}</p>
@@ -59,7 +70,8 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { IonPage, IonContent, IonSegment, IonSegmentButton, IonLabel, IonInput, IonButton } from '@ionic/vue';
+import { IonPage, IonContent, IonSegment, IonSegmentButton, IonLabel, IonInput, IonButton, IonIcon } from '@ionic/vue';
+import { eye, eyeOff } from 'ionicons/icons';
 import { db } from '@/lib/supabase';
 import { friendlyAuthError } from '@/lib/errors';
 
@@ -68,6 +80,7 @@ const identifier = ref('');   // 登录用：用户名或邮箱
 const username = ref('');     // 注册用
 const email = ref('');        // 注册用
 const password = ref('');
+const showPwd = ref(false);   // 眼睛：临时显示密码
 const busy = ref(false);
 const msg = ref('');
 const msgOk = ref(false);
@@ -140,4 +153,11 @@ async function submit(): Promise<void> {
 h1 { font-size: 32px; font-weight: 500; margin: 0 0 8px; color: var(--md-primary); }
 .msg { margin: 0; font-size: 13px; color: var(--md-error); }
 .msg.ok { color: var(--md-primary); }
+/* 密码框右侧的眼睛按钮 */
+.eye {
+  --padding-start: 4px;
+  --padding-end: 4px;
+  margin-inline-end: -6px;
+  color: var(--md-on-surface-variant);
+}
 </style>

@@ -98,10 +98,13 @@ function movePillTo(index: number, animate: boolean): void {
   const btns = tabButtons();
   if (!pill || !bar || !btns[index]) return;
 
-  const ind = (btns[index].querySelector('.ind') as HTMLElement) ?? btns[index];
+  const btn = btns[index];
+  const ind = (btn.querySelector('.ind') as HTMLElement) ?? btn;
   const barBox = bar.getBoundingClientRect();
-  const box = ind.getBoundingClientRect();
-  if (!box.width) return;
+  // 优先用「图标+文字」的盒子；量不到就退回整个按钮（有些 WebView 里 slot 内容会迟一拍）
+  let box = ind.getBoundingClientRect();
+  if (!box.width || !box.height) box = btn.getBoundingClientRect();
+  if (!box.width || !box.height) return;
 
   pillX = box.left - barBox.left;
   pillY = box.top - barBox.top;
@@ -178,23 +181,35 @@ function onBarUp(e: PointerEvent): void {
     // 1) 先让胶囊吸附到目标图标上；2) 再切页面
     suppressClickUntil = Date.now() + 500;
     movePillTo(best, true);
-    window.setTimeout(() => { void router.push(PATHS[best]); }, 120);
+    window.setTimeout(() => { void router.replace(PATHS[best]); }, 120);
   } else {
     movePillTo(activeIndex(), true);   // 不够近 / 拖回原位：弹回当前标签
   }
 }
 
 // 拖动结束后，拦掉原按钮的 click（否则会跳到手指按下的那个标签）
+// 另外把「点标签切页」改成 replace：历史里不再堆一串标签页，返回键就不会回到上一个标签。
 function onBarClickCapture(e: MouseEvent): void {
   if (Date.now() < suppressClickUntil) {
     e.preventDefault();
     e.stopPropagation();
+    return;
   }
+  const btn = (e.target as HTMLElement).closest('ion-tab-button') as HTMLElement | null;
+  if (!btn) return;
+  const idx = tabButtons().indexOf(btn);
+  if (idx < 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (idx !== activeIndex()) void router.replace(PATHS[idx]);
 }
 
 onMounted(() => {
   refresh(false);
   window.setTimeout(() => movePillTo(activeIndex(), false), 120);
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => movePillTo(activeIndex(), false));
+  });
   window.addEventListener('resize', onResize);
   barEl()?.addEventListener('click', onBarClickCapture, true);
 });

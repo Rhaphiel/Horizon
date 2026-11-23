@@ -7,7 +7,7 @@ const CACHE_KEY = 'hz:update-checked';
 const INTERVAL = 6 * 60 * 60 * 1000;
 
 export interface ReleaseInfo {
-  version: string;   // 例如 0.3.0
+  version: string;   // 例如 0.3.1
   body: string;      // Release 正文（更新内容）
   url: string;       // 发布页地址
 }
@@ -39,7 +39,7 @@ export async function checkUpdate(force = false): Promise<ReleaseInfo | null> {
     if (!res.ok) return null;
     const j = (await res.json()) as { tag_name?: string; body?: string; html_url?: string };
     const tag = j.tag_name || '';
-    // 你的 tag 形如 Horizon-v0.3.0，取出版本号
+    // 你的 tag 形如 Horizon-v0.3.1，取出版本号
     const m = /v?(\d+\.\d+\.\d+)/.exec(tag);
     const version = m ? m[1] : '';
     if (!version) return null;
