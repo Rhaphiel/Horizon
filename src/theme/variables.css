@@ -1,0 +1,28 @@
+/* 极简黑白主题：覆盖 Ionic 默认的蓝色 */
+:root {
+  --ion-font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', Roboto, Arial, sans-serif;
+
+  --ion-color-primary: #111111;
+  --ion-color-primary-rgb: 17, 17, 17;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: #0f0f0f;
+  --ion-color-primary-tint: #292929;
+
+  /* 状态栏 / 底部手势条的安全区。优先用 Capacitor 注入的变量，没有就用系统的 env() */
+  --ion-safe-area-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --ion-safe-area-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --ion-safe-area-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  --ion-safe-area-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ion-color-primary: #eeeeee;
+    --ion-color-primary-rgb: 238, 238, 238;
+    --ion-color-primary-contrast: #111111;
+    --ion-color-primary-contrast-rgb: 17, 17, 17;
+    --ion-color-primary-shade: #d1d1d1;
+    --ion-color-primary-tint: #f0f0f0;
+  }
+}
