@@ -26,29 +26,17 @@ jobs:
           java-version: 21
 
       - name: Install dependencies
+        timeout-minutes: 8
         run: npm install --no-audit --no-fund --loglevel=http
 
-      - name: Prepare web files
-        run: |
-          mkdir -p www
-          if [ -f index.html ] && [ ! -f www/index.html ]; then mv index.html www/index.html; fi
-          echo "Files in repo:"; ls -la . www
-          test -f www/index.html || { echo "ERROR: index.html not found in the repo"; exit 1; }
+      # 类型检查：只提示，不拦截（有类型警告时 APK 仍会继续构建）
+      - name: Type check (informational)
+        continue-on-error: true
+        run: npm run typecheck
 
-      - name: Copy supabase library into the app
-        run: cp node_modules/@supabase/supabase-js/dist/umd/supabase.js www/supabase.js
-
-      # 把版本号注入前端：index.html 里的 __APP_VERSION__ 占位符 → package.json 的 version
-      - name: Inject app version into web assets
-        run: |
-          VER=$(node -p "require('./package.json').version")
-          sed -i "s/__APP_VERSION__/$VER/g" www/index.html
-          echo "前端版本号：$VER"
-          grep -n "const APP_VERSION" www/index.html | head -2
-
-      # 静态 HTML 项目没有 Vite/Webpack；用 esbuild 将 Capacitor 8 插件 JS 包装成普通脚本。
-      - name: Bundle Capacitor native plugin bridges
-        run: npx esbuild native-plugins-entry.js --bundle --format=iife --outfile=www/native-plugins.js
+      # Vite 构建：Vue + TypeScript -> dist/；版本号由 vite.config.ts 从 package.json 注入
+      - name: Build web app
+        run: npm run build
 
       - name: Create Android project
         run: npx cap add android
@@ -80,9 +68,7 @@ jobs:
           fi
           grep -n 'uses-permission' "$MAN"
 
-      # 版本号以 package.json 为唯一来源：
-      #   0.2.0 -> versionName "0.2.0"，versionCode 200
-      # 每次发版只改 package.json，不用碰 android/ 目录（它每次构建都会重建）
+      # 版本号以 package.json 为唯一来源：0.3.0 -> versionName "0.3.0"，versionCode 300
       - name: Set app version from package.json
         run: |
           VER=$(node -p "require('./package.json').version")
