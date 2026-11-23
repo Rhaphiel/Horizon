@@ -55,7 +55,7 @@
           <span class="group-count">{{ friendState.friends.length }}</span>
         </button>
         <ion-list v-show="open.friends">
-          <ion-item v-for="f in friendState.friends" :key="f.rowId" button :detail="false" @click="message(f.id)">
+          <ion-item v-for="f in friendState.friends" :key="f.rowId" :detail="false">
             <Avatar slot="start" :name="f.name" :size="44" :src="avatarOf(f.id)" />
             <ion-label>{{ f.name }}</ion-label>
             <ion-button slot="end" size="small" fill="clear" color="danger" @click="removeFriend(f)">删除</ion-button>
@@ -91,8 +91,6 @@ import { chevronDown, chevronForward } from 'ionicons/icons';
 import { friendState, loadFriends, searchUsers, sendRequest, acceptRequest, removeFriendship } from '@/stores/friends';
 import type { FriendRow } from '@/stores/friends';
 import Avatar from '@/components/Avatar.vue';
-import { startDm } from '@/services/chatApi';
-import { openChat } from '@/services/navigation';
 import { avatarOf, ensureAvatars } from '@/stores/directory';
 import { confirmDialog, showToast } from '@/lib/toast';
 
@@ -154,15 +152,7 @@ async function removeFriend(f: FriendRow): Promise<void> {
   await run(removeFriendship(f.rowId), '已删除');
 }
 
-// 点好友这一行 = 开聊（去掉“发消息”按钮后，入口放在整行上）
-async function message(id: string): Promise<void> {
-  const r = await startDm(id);
-  if (r.error || !r.id) {
-    void showToast(r.error || '创建私聊失败');
-    return;
-  }
-  openChat(r.id);   // 记住来源标签页，返回时回到“好友”
-}
+
 </script>
 
 <style scoped>

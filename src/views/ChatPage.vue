@@ -7,7 +7,7 @@
         </ion-buttons>
         <ion-title>
           <div class="head">
-            <Avatar :name="title || '?'" :size="38" />
+            <Avatar :name="title || '?'" :size="38" :src="headerAvatar" />
             <span class="t">{{ title }}</span>
           </div>
         </ion-title>
@@ -116,7 +116,7 @@ import { copyText } from '@/lib/clipboard';
 import { leaveChat } from '@/services/navigation';
 import type { MessageRow } from '@/types/database';
 import { chats, chatTitle, getChat, loadChats, markRead, touchChat } from '@/stores/chats';
-import { nameOf } from '@/stores/directory';
+import { nameOf, avatarOf } from '@/stores/directory';
 import { myId } from '@/stores/session';
 import { fmtDateTime, fmtDay, fmtTime, highlightParts, makeSnippet } from '@/lib/format';
 import { confirmDialog, showToast } from '@/lib/toast';
@@ -160,6 +160,15 @@ const searched = ref(false);
 const me = computed(() => myId());
 const chat = computed(() => getChat(cid.value));
 const isGroup = computed(() => chat.value?.type === 'group');
+// 顶部头像：群聊用群头像，私聊用对方头像
+const headerAvatar = computed<string | null>(() => {
+  const c = getChat(cid.value);
+  if (!c) return null;
+  if (c.type === 'group') return c.avatarUrl;
+  const other = c.members.find(m => m.user_id !== myId());
+  return avatarOf(other?.user_id);
+});
+
 const title = computed(() => {
   const c = chat.value;
   if (!c) return '';
@@ -234,7 +243,7 @@ async function init(): Promise<void> {
   if (!getChat(cid.value)) await loadChats();
   if (!getChat(cid.value)) {
     void showToast('找不到这个聊天');
-    ionRouter.navigate('/tabs/chats', 'root', 'replace');
+    ionRouter.navigate('/tabs/chats?force=1', 'root', 'replace');
     return;
   }
   const msg = typeof route.query.msg === 'string' ? route.query.msg : '';
@@ -472,7 +481,7 @@ async function openMenu(): Promise<void> {
     buttons.push({
       text: '群聊信息',
       handler: () => {
-        void router.push(`/chat/${cid.value}/info`);
+        void router.push({ path: `/chat/${cid.value}/info`, query: route.query });   // 带上 from，返回时才知道该回哪个标签
       },
     });
   }
@@ -553,7 +562,7 @@ onIonViewWillLeave(() => {
 
 // 这个聊天不存在了（被移出群 / 群被解散 / 自己退群）→ 回到聊天列表
 watch(chat, (c, old) => {
-  if (old && !c) ionRouter.navigate('/tabs/chats', 'root', 'replace');
+  if (old && !c) ionRouter.navigate('/tabs/chats?force=1', 'root', 'replace');
 });
 
 // 路由里的聊天 id 变化时加载对应聊天（必须放在所有变量声明之后）

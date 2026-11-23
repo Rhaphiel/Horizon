@@ -51,7 +51,7 @@ const ty = ref(0);
 const ready = ref(false);
 
 // 图片按“铺满裁剪区”为基准缩放
-const baseScale = computed(() => (natW.value && natH.value ? stage.value / Math.max(natW.value, natH.value) : 1));
+const baseScale = computed(() => (natW.value && natH.value ? stage.value / Math.min(natW.value, natH.value) : 1));
 const dispW = computed(() => natW.value * baseScale.value * zoom.value);
 const dispH = computed(() => natH.value * baseScale.value * zoom.value);
 

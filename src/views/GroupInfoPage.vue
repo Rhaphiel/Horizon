@@ -1,52 +1,76 @@
 <template>
   <ion-page>
     <ion-header>
-      <ion-toolbar>
+      <ion-toolbar class="ghost-bar">
         <ion-buttons slot="start">
-          <ion-back-button :default-href="`/chat/${cid}`" text="返回" />
+          <ion-button fill="clear" @click="backToChat"><ion-icon :icon="arrowBack" /></ion-button>
         </ion-buttons>
-        <ion-title>群聊信息</ion-title>
+        <ion-buttons slot="end">
+          <ion-button fill="clear" aria-label="更多" @click="moreMenu($event)"><ion-icon :icon="ellipsisVertical" /></ion-button>
+        </ion-buttons>
       </ion-toolbar>
     </ion-header>
 
-    <ion-content>
+    <ion-content class="gi">
       <template v-if="chat">
-        <!-- 群头像：群主可以点一下更换 -->
-        <div class="ava-wrap">
-          <button class="ava-btn" type="button" :disabled="uploading || !isOwner" @click="pickAvatar">
-            <Avatar :name="chat.name || '群聊'" :size="96" :src="chat.avatarUrl" />
+        <!-- 群头像 + 名称 + 人数 -->
+        <div class="hero">
+          <button class="ava" type="button" :disabled="!isOwner || uploading" @click="pickAvatar">
+            <Avatar :name="chat.name || '群聊'" :size="108" :src="chat.avatarUrl" />
+            <span v-if="isOwner" class="ava-edit">{{ uploading ? '…' : '改' }}</span>
           </button>
-          <p class="ava-tip">{{ isOwner ? (uploading ? '上传中…' : '点群头像可更换') : '' }}</p>
+          <h1>{{ chat.name || '群聊' }}</h1>
+          <p>{{ chat.members.length }} 位成员</p>
+          <span v-if="isOwner" class="ava-tip">点群头像可更换</span>
           <input ref="fileEl" type="file" accept="image/jpeg,image/png,image/webp" hidden @change="onAvatarPick" />
           <AvatarCropper :open="cropOpen" :src="cropSrc" @cancel="closeCrop" @done="onCropped" @failed="onCropFailed" />
         </div>
 
-        <ion-list>
-          <ion-item lines="none">
-            <ion-label>
-              <p>群名称</p>
-              <h2>{{ chat.name || '群聊' }}</h2>
-            </ion-label>
-          </ion-item>
-        </ion-list>
+        <!-- 四个快捷操作 -->
+        <div class="acts">
+          <button type="button" @click="backToChat">
+            <span class="ico">💬</span><span>消息</span>
+          </button>
+          <button type="button" @click="toggleMute">
+            <span class="ico">{{ muted ? '🔕' : '🔔' }}</span><span>{{ muted ? '已静音' : '静音' }}</span>
+          </button>
+          <button type="button" disabled>
+            <span class="ico">📹</span><span>视频通话</span>
+          </button>
+          <button type="button" class="danger" @click="leave">
+            <span class="ico">⏏</span><span>退出</span>
+          </button>
+        </div>
 
-        <div class="section-title">群成员（{{ chat.members.length }}）</div>
-        <ion-list>
-          <ion-item v-for="m in members" :key="m.user_id">
-            <ion-label>
-              {{ nameOf(m.user_id) }}
-              <span v-if="m.role === 'owner'" class="tag">群主</span>
-              <span v-if="m.user_id === me" class="tag">我</span>
-            </ion-label>
-            <ion-button v-if="isOwner && m.user_id !== me" slot="end" size="small" fill="clear" color="danger" @click="kick(m.user_id)">移出</ion-button>
-          </ion-item>
-        </ion-list>
+        <!-- 成员卡片 -->
+        <div class="card">
+          <button v-if="isOwner" class="add" type="button" @click="addOpen = true">
+            <span class="plus">＋</span>
+            <span>添加成员</span>
+          </button>
+          <div v-for="m in members" :key="m.user_id" class="mem">
+            <Avatar :name="nameOf(m.user_id)" :src="avatarOf(m.user_id)" :size="42" />
+            <div class="mi">
+              <b>{{ nameOf(m.user_id) }}<em v-if="m.user_id === me">（我）</em></b>
+              <small>{{ m.role === 'owner' ? '群主' : '成员' }}</small>
+            </div>
+            <span v-if="m.role === 'owner'" class="owner">所有者</span>
+            <button v-if="isOwner && m.user_id !== me" class="kick" type="button" @click="kick(m.user_id)">移出</button>
+          </div>
+        </div>
 
-        <div class="ion-padding actions">
-          <ion-button v-if="isOwner" expand="block" fill="outline" @click="addOpen = true">添加成员</ion-button>
-          <ion-button expand="block" fill="outline" @click="clearChat">清空聊天记录</ion-button>
-          <ion-button v-if="isOwner" expand="block" fill="outline" color="danger" @click="dissolve">解散群聊</ion-button>
-          <ion-button expand="block" fill="outline" color="danger" @click="leave">退出群聊</ion-button>
+        <!-- 媒体 / 链接 -->
+        <div class="seg">
+          <button type="button" :class="{ on: tab === 'media' }" @click="tab = 'media'">媒体</button>
+          <button type="button" :class="{ on: tab === 'links' }" @click="tab = 'links'">链接</button>
+        </div>
+        <p class="hint">
+          {{ tab === 'media' ? '在此聊天中分享的图片和视频会显示在这里。' : '在此聊天中分享的链接会显示在这里。' }}
+        </p>
+
+        <div class="bottom">
+          <button type="button" @click="clearChat">清空聊天记录</button>
+          <button v-if="isOwner" type="button" class="danger-text" @click="dissolve">解散群聊</button>
         </div>
       </template>
 
@@ -67,13 +91,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { IonPage, IonHeader, IonToolbar, IonButtons, IonBackButton, IonButton, IonTitle, IonContent, IonList, IonItem, IonLabel, useIonRouter } from '@ionic/vue';
+import { IonPage, IonHeader, IonToolbar, IonButtons, IonButton, IonIcon, IonContent, useIonRouter, actionSheetController } from '@ionic/vue';
+import { arrowBack, ellipsisVertical } from 'ionicons/icons';
 import PickFriendsModal from '@/components/PickFriendsModal.vue';
 import Avatar from '@/components/Avatar.vue';
 import AvatarCropper from '@/components/AvatarCropper.vue';
 import { chatTitle, getChat, myRole, loadChats } from '@/stores/chats';
 import { friendState } from '@/stores/friends';
-import { nameOf } from '@/stores/directory';
+import { nameOf, avatarOf } from '@/stores/directory';
 import { myId } from '@/stores/session';
 import { confirmDialog, showToast } from '@/lib/toast';
 import { uploadGroupAvatar, isStaticImage } from '@/services/avatarApi';
@@ -89,6 +114,8 @@ const fileEl = ref<HTMLInputElement | null>(null);
 const uploading = ref(false);
 const cropOpen = ref(false);
 const cropSrc = ref('');
+const tab = ref<'media' | 'links'>('media');
+const muted = ref(false);
 
 const me = computed(() => myId());
 const chat = computed(() => getChat(cid.value));
@@ -102,7 +129,26 @@ const members = computed(() =>
 // 可以添加的人：我的好友里，还不在这个群里的
 const candidates = computed(() => friendState.friends.filter(f => !chat.value?.members.some(m => m.user_id === f.id)));
 
-const toChats = (): void => ionRouter.navigate('/tabs/chats', 'root', 'replace');
+const toChats = (): void => ionRouter.navigate('/tabs/chats?force=1', 'root', 'replace');
+const backToChat = (): void => ionRouter.back();
+
+function toggleMute(): void {
+  muted.value = !muted.value;
+  void showToast(muted.value ? '已静音（仅本机）' : '已取消静音');
+}
+
+async function moreMenu(ev: Event): Promise<void> {
+  const sheet = await actionSheetController.create({
+    header: '更多操作',
+    buttons: [
+      { text: '清空聊天记录', handler: () => { void clearChat(); } },
+      ...(isOwner.value ? [{ text: '解散群聊', role: 'destructive' as const, handler: () => { void dissolve(); } }] : []),
+      { text: '取消', role: 'cancel' },
+    ],
+  });
+  await sheet.present();
+  void ev;
+}
 
 // ----- 群头像（只有群主能改）-----
 function pickAvatar(): void {
@@ -116,7 +162,6 @@ function closeCrop(): void {
   cropSrc.value = '';
 }
 
-// 选文件：先挡掉视频 / GIF，再进圆形裁剪
 function onAvatarPick(e: Event): void {
   const input = e.target as HTMLInputElement;
   const file = input.files?.[0];
@@ -140,7 +185,7 @@ async function onCropped(blob: Blob): Promise<void> {
   try {
     const url = await uploadGroupAvatar(cid.value, blob);
     if (url) {
-      await loadChats();          // 重新拉列表，聊天列表里的头像也会同步
+      await loadChats();
       void showToast('群头像已更新');
     } else {
       void showToast('上传失败，请检查网络或存储权限');
@@ -223,10 +268,76 @@ watch(
 </script>
 
 <style scoped>
-.tag { margin-left: 8px; font-size: 11px; color: var(--ion-color-medium); border: 1px solid var(--ion-color-medium); padding: 0 6px; }
-.actions { display: flex; flex-direction: column; gap: 8px; }
-.ava-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 20px 0 8px; }
-.ava-btn { background: transparent; border: 0; padding: 0; cursor: pointer; }
-.ava-btn:disabled { cursor: default; }
-.ava-tip { margin: 0; font-size: 12px; color: var(--md-on-surface-variant); min-height: 16px; }
+.ghost-bar { --background: transparent; --border-width: 0; }
+.ghost-bar ion-button { --color: var(--md-on-surface); }
+
+.gi { --background: var(--md-surface); }
+
+/* 顶部：头像 / 名称 / 人数 */
+.hero { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 28px 20px 18px; }
+.hero h1 { margin: 10px 0 0; font-size: 24px; font-weight: 700; letter-spacing: 0.01em; }
+.hero p { margin: 0; font-size: 13px; color: var(--md-on-surface-variant); }
+.ava-tip { font-size: 12px; color: var(--md-on-surface-variant); }
+.ava { position: relative; padding: 0; border: 0; background: transparent; }
+.ava-edit {
+  position: absolute; right: -2px; bottom: -2px;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--md-primary); color: #fff;
+  font-size: 12px; line-height: 28px; text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+
+/* 四个快捷操作 */
+.acts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 4px 16px 18px; }
+.acts button {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 14px 6px; border: 0; border-radius: 16px;
+  background: var(--md-surface-container); color: var(--md-on-surface);
+  font-size: 12px;
+}
+.acts .ico { font-size: 20px; }
+.acts button.danger { color: #ff6b6b; }
+.acts button:disabled { opacity: .45; }
+
+/* 成员卡片 */
+.card {
+  margin: 0 16px 18px; border-radius: 18px; overflow: hidden;
+  background: var(--md-surface-container);
+}
+.add {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 16px; border: 0; background: transparent;
+  color: var(--md-on-surface); font-size: 15px; text-align: left;
+}
+.add .plus { font-size: 20px; color: var(--md-on-surface-variant); }
+.mem { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+.mem + .mem, .add + .mem { border-top: 1px solid rgba(255,255,255,.06); }
+.mi { flex: 1; min-width: 0; }
+.mi b { display: block; font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mi b em { font-style: normal; color: var(--md-on-surface-variant); font-weight: 400; }
+.mi small { font-size: 12px; color: var(--md-on-surface-variant); }
+.owner {
+  font-size: 11px; padding: 3px 8px; border-radius: 10px;
+  background: rgba(167,139,250,.18); color: #c4b5fd;
+}
+.kick { border: 0; background: transparent; color: #ff6b6b; font-size: 12px; }
+
+/* 媒体 / 链接 */
+.seg {
+  display: inline-flex; gap: 4px; margin: 0 16px;
+  padding: 4px; border-radius: 999px; background: var(--md-surface-container);
+}
+.seg button {
+  border: 0; background: transparent; color: var(--md-on-surface-variant);
+  font-size: 13px; padding: 8px 22px; border-radius: 999px;
+}
+.seg button.on { background: rgba(167,139,250,.22); color: #c4b5fd; }
+.hint { margin: 18px 20px; font-size: 13px; line-height: 1.6; color: var(--md-on-surface-variant); text-align: center; }
+
+.bottom { display: flex; flex-direction: column; gap: 10px; padding: 8px 16px 28px; }
+.bottom button {
+  padding: 14px; border: 1px solid var(--md-outline); border-radius: 14px;
+  background: transparent; color: var(--md-on-surface); font-size: 14px;
+}
+.bottom .danger-text { color: #ff6b6b; border-color: rgba(255,107,107,.4); }
 </style>
