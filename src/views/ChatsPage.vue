@@ -3,9 +3,6 @@
     <ion-header>
       <ion-toolbar>
         <ion-title>聊天</ion-title>
-        <ion-buttons slot="end">
-          <ion-button @click="groupOpen = true">新建群聊</ion-button>
-        </ion-buttons>
       </ion-toolbar>
       <ion-toolbar>
         <ion-searchbar
@@ -50,18 +47,26 @@
 
       <!-- 聊天列表 -->
       <ion-list v-if="sortedChats.length">
-        <ion-item v-for="c in sortedChats" :key="c.id" button :detail="false" @click="openChat(c.id)">
+        <ion-item v-for="c in sortedChats" :key="c.id" button :detail="false" lines="none" class="row" @click="openChat(c.id)">
+          <Avatar slot="start" :name="chatTitle(c)" :size="56" />
           <ion-label>
             <h2>{{ chatTitle(c) }}</h2>
             <p>{{ preview(c) }}</p>
           </ion-label>
           <div slot="end" class="end">
-            <span v-if="c.lastAt" class="time">{{ fmtListTime(c.lastAt) }}</span>
-            <ion-badge v-if="c.unread > 0">{{ c.unread > 99 ? '99+' : c.unread }}</ion-badge>
+            <span v-if="c.lastAt" :class="['time', { hot: c.unread > 0 }]">{{ fmtListTime(c.lastAt) }}</span>
+            <span v-if="c.unread > 0" class="unread">{{ c.unread > 99 ? '99+' : c.unread }}</span>
           </div>
         </ion-item>
       </ion-list>
       <div v-else-if="chats.loaded" class="empty-tip">还没有聊天。去“好友”里点“发消息”，或新建群聊。</div>
+
+      <!-- 新建群聊：右下角悬浮按钮（M3 FAB，圆角矩形） -->
+      <ion-fab slot="fixed" vertical="bottom" horizontal="end">
+        <ion-fab-button aria-label="新建群聊" @click="groupOpen = true">
+          <ion-icon :icon="createOutline" />
+        </ion-fab-button>
+      </ion-fab>
 
       <PickFriendsModal
         :open="groupOpen"
@@ -80,8 +85,9 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { IonPage, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonSearchbar, IonContent, IonRefresher, IonRefresherContent, IonList, IonItem, IonLabel, IonBadge } from '@ionic/vue';
+import { IonPage, IonHeader, IonToolbar, IonTitle, IonButton, IonSearchbar, IonContent, IonRefresher, IonRefresherContent, IonList, IonItem, IonLabel, IonFab, IonFabButton, IonIcon } from '@ionic/vue';
+import { createOutline } from 'ionicons/icons';
+import Avatar from '@/components/Avatar.vue';
 import PickFriendsModal from '@/components/PickFriendsModal.vue';
 import { chats, sortedChats, chatTitle, getChat, loadChats } from '@/stores/chats';
 import type { Chat } from '@/stores/chats';
@@ -92,9 +98,9 @@ import { fmtDateTime, fmtTime, fmtDay, highlightParts, makeSnippet, oneLine } fr
 import { showToast } from '@/lib/toast';
 import { searchMessages } from '@/services/messagesApi';
 import { createGroup } from '@/services/chatApi';
+import { openChat as goChat } from '@/services/navigation';
 import type { MessageRow } from '@/types/database';
 
-const router = useRouter();
 const kw = ref('');
 const lastKw = ref('');
 const hits = ref<MessageRow[] | null>(null);
@@ -102,7 +108,7 @@ const groupOpen = ref(false);
 const creating = ref(false);
 
 function openChat(id: string): void {
-  void router.push(`/chat/${id}`);
+  goChat(id);
 }
 
 function preview(c: Chat): string {
@@ -148,7 +154,7 @@ function hitMeta(h: MessageRow): string {
   return `${c ? chatTitle(c) : '聊天'} · ${who} · ${fmtDateTime(h.created_at)}`;
 }
 function openHit(h: MessageRow): void {
-  void router.push({ path: `/chat/${h.conversation_id}`, query: { msg: h.id, at: h.created_at } });
+  goChat(h.conversation_id, { msg: h.id, at: h.created_at });
 }
 
 // ----- 新建群聊 -----
@@ -163,11 +169,21 @@ async function onCreateGroup(p: { ids: string[]; name: string }): Promise<void> 
   }
   groupOpen.value = false;
   void showToast('群聊已创建');
-  void router.push(`/chat/${r.id}`);
+  goChat(r.id);
 }
 </script>
 
 <style scoped>
-.end { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-.time { font-size: 11px; color: var(--ion-color-medium); }
+.row { --padding-start: 16px; --padding-end: 16px; --min-height: 76px; --background: transparent; }
+.row h2 { font-size: 17px; font-weight: 500; margin: 0 0 2px; }
+.row p { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; }
+.row :deep(.avatar) { margin-right: 14px; }
+.end { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; align-self: flex-start; padding-top: 14px; }
+.time { font-size: 12px; color: var(--md-on-surface-variant); }
+.time.hot { color: var(--md-primary); }
+.unread {
+  min-width: 24px; height: 24px; padding: 0 8px; box-sizing: border-box;
+  border-radius: 12px; background: var(--md-primary); color: var(--md-on-primary);
+  font-size: 13px; font-weight: 500; line-height: 24px; text-align: center;
+}
 </style>

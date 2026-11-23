@@ -49,3 +49,16 @@ npm run build      # 构建到 dist/
 1. 华为 / HarmonyOS 5+ 不兼容 APK
 2. 国产 ROM 需在系统设置里开“自启动 / 后台运行”，否则推送会被限制
 3. 消息明文存库（无端到端加密），敏感内容别发
+
+## v0.4 新增：用户名登录（需要部署一次）
+
+登录页现在可以直接输入「用户名」登录（输入带 @ 的仍按邮箱登录）。用户名登录由一个服务端函数完成，需要部署一次：
+
+```
+supabase functions deploy login-by-username
+```
+
+函数使用 Supabase 自动提供的 `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`，不需要额外设置密钥。
+没部署时，用户名登录会提示“尚未部署”，邮箱登录不受影响。
+
+另外 v0.4 新增依赖 `ionicons`，请先运行 `npm install`。

@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { actionSheetController, alertController, modalController, popoverController } from '@ionic/vue';
 import router from '@/router';
 import { showToast } from '@/lib/toast';
+import { leaveChat } from '@/services/navigation';
 
 // 安卓返回键：
 // 1. 有弹窗 / 菜单打开 → 先关掉它
@@ -40,7 +41,9 @@ export function installBackButton(): void {
     }
 
     const path = router.currentRoute.value.path;
-    if (path.startsWith('/chat/')) {
+    if (/^\/chat\/[^/]+$/.test(path)) {
+      leaveChat();
+    } else if (path.startsWith('/chat/')) {
       router.back();
     } else if (path === '/tabs/friends' || path === '/tabs/me') {
       void router.replace('/tabs/chats');

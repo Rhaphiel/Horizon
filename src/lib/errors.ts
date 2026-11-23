@@ -3,7 +3,7 @@ export function friendlyAuthError(message?: string): string {
   const m = (message || '').toLowerCase();
   if (m.includes('database error')) return '用户名已被占用或格式不对';
   if (m.includes('already registered')) return '该邮箱已注册，请直接登录';
-  if (m.includes('invalid login')) return '邮箱或密码不正确';
+  if (m.includes('invalid login')) return '用户名（或邮箱）或密码不正确';
   if (m.includes('password')) return '密码不符合要求（至少 6 位）';
   if (m.includes('rate limit')) return '操作太频繁，请稍后再试';
   if (m.includes('failed to fetch') || m.includes('network')) return '网络连接失败，请检查网络';

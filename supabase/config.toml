@@ -1,0 +1,5 @@
+[functions.push-message]
+verify_jwt = false
+
+[functions.login-by-username]
+verify_jwt = false

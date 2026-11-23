@@ -18,6 +18,7 @@
         <div class="section-title">搜索结果</div>
         <ion-list>
           <ion-item v-for="u in results" :key="u.id">
+            <Avatar slot="start" :name="u.username" :size="44" />
             <ion-label>{{ u.username }}<span v-if="relationText(u.id)" class="sub">（{{ relationText(u.id) }}）</span></ion-label>
             <ion-button v-if="!friendState.relations[u.id]" slot="end" size="small" fill="outline" @click="add(u.id)">添加</ion-button>
             <ion-button v-else-if="friendState.relations[u.id].status === 'accepted'" slot="end" size="small" fill="outline" @click="message(u.id)">发消息</ion-button>
@@ -30,6 +31,7 @@
       <div class="section-title">收到的好友申请</div>
       <ion-list>
         <ion-item v-for="f in friendState.incoming" :key="f.rowId">
+          <Avatar slot="start" :name="f.name" :size="44" />
           <ion-label>{{ f.name }}</ion-label>
           <ion-button slot="end" size="small" fill="outline" @click="accept(f.rowId)">同意</ion-button>
           <ion-button slot="end" size="small" fill="clear" @click="remove(f.rowId)">拒绝</ion-button>
@@ -40,6 +42,7 @@
       <div class="section-title">我的好友</div>
       <ion-list>
         <ion-item v-for="f in friendState.friends" :key="f.rowId">
+          <Avatar slot="start" :name="f.name" :size="44" />
           <ion-label>{{ f.name }}</ion-label>
           <ion-button slot="end" size="small" fill="outline" @click="message(f.id)">发消息</ion-button>
           <ion-button slot="end" size="small" fill="clear" color="danger" @click="removeFriend(f)">删除</ion-button>
@@ -50,6 +53,7 @@
       <div class="section-title">已发出的申请</div>
       <ion-list>
         <ion-item v-for="f in friendState.outgoing" :key="f.rowId">
+          <Avatar slot="start" :name="f.name" :size="44" />
           <ion-label>{{ f.name }}</ion-label>
           <ion-button slot="end" size="small" fill="clear" @click="remove(f.rowId)">撤回</ion-button>
         </ion-item>
@@ -61,14 +65,14 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
 import { IonPage, IonHeader, IonToolbar, IonTitle, IonSearchbar, IonContent, IonRefresher, IonRefresherContent, IonList, IonItem, IonLabel, IonButton } from '@ionic/vue';
 import { friendState, loadFriends, searchUsers, sendRequest, acceptRequest, removeFriendship } from '@/stores/friends';
 import type { FriendRow } from '@/stores/friends';
+import Avatar from '@/components/Avatar.vue';
 import { startDm } from '@/services/chatApi';
+import { openChat } from '@/services/navigation';
 import { confirmDialog, showToast } from '@/lib/toast';
 
-const router = useRouter();
 const q = ref('');
 const results = ref<{ id: string; username: string }[] | null>(null);
 
@@ -126,10 +130,11 @@ async function message(id: string): Promise<void> {
     void showToast(r.error || '创建私聊失败');
     return;
   }
-  void router.push(`/chat/${r.id}`);
+  openChat(r.id);   // 记下来源标签页，返回时回到“好友”
 }
 </script>
 
 <style scoped>
-.sub { color: var(--ion-color-medium); font-size: 12px; margin-left: 6px; }
+ion-item :deep(.avatar) { margin-right: 14px; }
+.sub { color: var(--md-on-surface-variant); font-size: 12px; margin-left: 6px; }
 </style>

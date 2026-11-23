@@ -1,14 +1,19 @@
 <template>
-  <ion-page ref="page">
+  <ion-page ref="page" :style="bubbleVars">
     <ion-header>
       <ion-toolbar v-if="mode === 'chat'">
         <ion-buttons slot="start">
-          <ion-back-button default-href="/tabs/chats" text="返回" />
+          <ion-button class="icon-btn" aria-label="返回" @click="leaveChat"><ion-icon slot="icon-only" :icon="arrowBack" /></ion-button>
         </ion-buttons>
-        <ion-title>{{ title }}</ion-title>
+        <ion-title>
+          <div class="head">
+            <Avatar :name="title || '?'" :size="38" />
+            <span class="t">{{ title }}</span>
+          </div>
+        </ion-title>
         <ion-buttons slot="end">
-          <ion-button @click="openSearch">搜索</ion-button>
-          <ion-button @click="openMenu">更多</ion-button>
+          <ion-button class="icon-btn" aria-label="搜索" @click="openSearch"><ion-icon slot="icon-only" :icon="searchOutline" /></ion-button>
+          <ion-button class="icon-btn" aria-label="更多" @click="openMenu"><ion-icon slot="icon-only" :icon="ellipsisVertical" /></ion-button>
         </ion-buttons>
       </ion-toolbar>
       <ion-toolbar v-else>
@@ -19,24 +24,34 @@
       </ion-toolbar>
     </ion-header>
 
-    <ion-content ref="content">
+    <ion-content ref="content" :class="{ plain: mode === 'search' }">
       <!-- 消息 -->
       <div v-if="mode === 'chat'" class="msgs">
         <div v-if="hasOlder" class="more">
-          <ion-button size="small" fill="outline" :disabled="loadingMore" @click="loadOlder">加载更早的消息</ion-button>
+          <ion-button size="small" class="tonal" :disabled="loadingMore" @click="loadOlder">加载更早的消息</ion-button>
         </div>
 
         <template v-for="it in items" :key="it.key">
           <div v-if="it.day" class="day">{{ it.day }}</div>
           <div v-else-if="it.msg" :class="['msg', { mine: it.msg.sender_id === me, flash: it.msg.id === flashId }]" :data-id="it.msg.id">
-            <div v-if="it.msg.sender_id !== me && isGroup" class="who">{{ nameOf(it.msg.sender_id) }}</div>
-            <div class="bubble">{{ it.msg.body }}</div>
-            <div class="time">{{ fmtTime(it.msg.created_at) }}</div>
+            <div
+              class="bubble"
+              @pointerdown="pressStart($event, it.msg)"
+              @pointermove="pressMove"
+              @pointerup="cancelPress"
+              @pointercancel="cancelPress"
+              @pointerleave="cancelPress"
+              @contextmenu.prevent="onContext(it.msg)"
+            >
+              <div v-if="it.msg.sender_id !== me && isGroup" class="who">{{ nameOf(it.msg.sender_id) }}</div>
+              <div class="body">{{ it.msg.body }}</div>
+              <div class="meta">{{ fmtTime(it.msg.created_at) }}</div>
+            </div>
           </div>
         </template>
 
         <div v-if="hasNewer" class="more">
-          <ion-button size="small" fill="outline" :disabled="loadingMore" @click="loadNewer">加载更新的消息</ion-button>
+          <ion-button size="small" class="tonal" :disabled="loadingMore" @click="loadNewer">加载更新的消息</ion-button>
         </div>
         <div v-if="!rows.length && !hasOlder && !hasNewer" class="empty-tip">还没有消息。</div>
       </div>
@@ -60,11 +75,27 @@
       <div v-if="note" class="note">{{ note }}</div>
       <ion-toolbar>
         <div class="composer">
-          <ion-input v-model="text" placeholder="输入消息" maxlength="1000" autocomplete="off" @keydown="onKey" />
-          <ion-button :disabled="sending || !(text ?? '').trim()" @click="send">发送</ion-button>
+          <!-- 原生 textarea：按屏幕宽度自动换行，内容多时向上长高（最高约 5 行，再多就在框内滚动） -->
+          <textarea
+            ref="ta"
+            v-model="text"
+            class="ta"
+            rows="1"
+            maxlength="1000"
+            placeholder="输入消息"
+            autocomplete="off"
+            autocapitalize="sentences"
+            @keydown="onKey"
+          />
+          <ion-button class="send" :disabled="sending || !(text ?? '').trim()" aria-label="发送" @click="send">
+            <ion-icon slot="icon-only" :icon="sendIcon" />
+          </ion-button>
         </div>
       </ion-toolbar>
     </ion-footer>
+
+    <SelectTextModal :open="selectOpen" :text="pickedBody" @close="selectOpen = false" />
+    <ForwardModal :open="forwardOpen" :body="pickedBody" :busy="forwarding" @close="forwardOpen = false" @submit="forwardTo" />
   </ion-page>
 </template>
 
@@ -72,10 +103,17 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
-  IonPage, IonHeader, IonToolbar, IonButtons, IonBackButton, IonButton, IonTitle, IonContent, IonFooter,
-  IonInput, IonSearchbar, IonList, IonItem, IonLabel,
+  IonPage, IonHeader, IonToolbar, IonButtons, IonButton, IonTitle, IonContent, IonFooter,
+  IonSearchbar, IonList, IonItem, IonLabel, IonIcon,
   actionSheetController, onIonViewDidEnter, onIonViewWillLeave, useIonRouter,
 } from '@ionic/vue';
+import { arrowBack, arrowRedoOutline, closeOutline, copyOutline, ellipsisVertical, searchOutline, send as sendIcon, textOutline } from 'ionicons/icons';
+import Avatar from '@/components/Avatar.vue';
+import SelectTextModal from '@/components/SelectTextModal.vue';
+import ForwardModal from '@/components/ForwardModal.vue';
+import { bubbleVars } from '@/theme/appearance';
+import { copyText } from '@/lib/clipboard';
+import { leaveChat } from '@/services/navigation';
 import type { MessageRow } from '@/types/database';
 import { chats, chatTitle, getChat, loadChats, markRead, touchChat } from '@/stores/chats';
 import { nameOf } from '@/stores/directory';
@@ -111,6 +149,7 @@ const text = ref('');
 const sending = ref(false);
 const note = ref('');
 const flashId = ref('');
+const ta = ref<HTMLTextAreaElement | null>(null);
 
 const mode = ref<'chat' | 'search'>('chat');
 const kw = ref('');
@@ -266,12 +305,24 @@ async function loadNewer(): Promise<void> {
 }
 
 // ---------- 发送 ----------
+// 手机上回车 = 换行（用右边的发送按钮发送）；电脑上回车发送，Shift+回车换行
+const isTouch = window.matchMedia('(pointer: coarse)').matches;
 function onKey(e: KeyboardEvent): void {
-  if (e.key === 'Enter' && !e.isComposing) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !isTouch) {
     e.preventDefault();
     void send();
   }
 }
+
+const MAX_TA = 132;   // 输入框最高像素（约 5 行）
+function fitTextarea(): void {
+  const el = ta.value;
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, MAX_TA) + 'px';
+  el.style.overflowY = el.scrollHeight > MAX_TA ? 'auto' : 'hidden';
+}
+watch(text, () => void nextTick(fitTextarea));
 
 async function send(): Promise<void> {
   const body = (text.value ?? '').trim();
@@ -287,12 +338,99 @@ async function send(): Promise<void> {
       return;
     }
     text.value = '';
+    void nextTick(fitTextarea);
     mergeRows([data]);
     touchChat(data);
     await scrollBottom();
   } finally {
     sending.value = false;
   }
+}
+
+// ---------- 长按消息：复制 / 选择文本 / 转发 ----------
+const selectOpen = ref(false);
+const forwardOpen = ref(false);
+const forwarding = ref(false);
+const pickedBody = ref('');
+
+let pressTimer = 0;
+let pressX = 0;
+let pressY = 0;
+let lastMenuAt = 0;
+
+function pressStart(e: PointerEvent, m: MessageRow): void {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  cancelPress();
+  pressX = e.clientX;
+  pressY = e.clientY;
+  pressTimer = window.setTimeout(() => {
+    pressTimer = 0;
+    void openMsgMenu(m);
+  }, 450);
+}
+function pressMove(e: PointerEvent): void {
+  if (pressTimer && Math.hypot(e.clientX - pressX, e.clientY - pressY) > 10) cancelPress();   // 手指在滑动：不算长按
+}
+function cancelPress(): void {
+  if (pressTimer) window.clearTimeout(pressTimer);
+  pressTimer = 0;
+}
+// 有些系统会额外触发 contextmenu；刚弹过菜单就忽略，避免弹两次
+function onContext(m: MessageRow): void {
+  if (Date.now() - lastMenuAt > 800) void openMsgMenu(m);
+}
+
+async function openMsgMenu(m: MessageRow): Promise<void> {
+  lastMenuAt = Date.now();
+  navigator.vibrate?.(12);
+  const sheet = await actionSheetController.create({
+    buttons: [
+      {
+        text: '复制',
+        icon: copyOutline,
+        // 复制要在点击的当下执行，系统才允许写剪贴板
+        handler: () => {
+          void copyText(m.body).then(ok => showToast(ok ? '已复制' : '复制失败'));
+        },
+      },
+      { text: '选择文本', icon: textOutline, data: 'select' },
+      { text: '转发', icon: arrowRedoOutline, data: 'forward' },
+      { text: '取消', icon: closeOutline, role: 'cancel' },
+    ],
+  });
+  await sheet.present();
+  const { data } = await sheet.onDidDismiss<string>();
+  pickedBody.value = m.body;
+  if (data === 'select') selectOpen.value = true;
+  if (data === 'forward') forwardOpen.value = true;
+}
+
+async function forwardTo(ids: string[]): Promise<void> {
+  const uid = myId();
+  const body = pickedBody.value;
+  if (!uid || !body || !ids.length || forwarding.value) return;
+  forwarding.value = true;
+  let ok = 0;
+  let fail = 0;
+  try {
+    for (const id of ids) {
+      const { data, error } = await sendMessage(id, uid, body);
+      if (error || !data) {
+        fail += 1;
+        continue;
+      }
+      ok += 1;
+      touchChat(data);
+      if (id === cid.value && !hasNewer.value) {
+        mergeRows([data]);
+        await scrollBottom();
+      }
+    }
+  } finally {
+    forwarding.value = false;
+  }
+  forwardOpen.value = false;
+  void showToast(fail ? `已转发到 ${ok} 个聊天，${fail} 个失败` : `已转发到 ${ok} 个聊天`);
 }
 
 // ---------- 搜索本聊天 ----------
@@ -397,6 +535,7 @@ onMounted(() => {
   });
 });
 onUnmounted(() => {
+  cancelPress();
   offBack?.();
   offMsg?.();
   offResume?.();
@@ -431,23 +570,64 @@ watch(
 </script>
 
 <style scoped>
-.msgs { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
-.more { align-self: center; }
-.day { align-self: center; color: var(--ion-color-medium); font-size: 11px; letter-spacing: 0.06em; }
-.msg { max-width: 78%; display: flex; flex-direction: column; align-items: flex-start; }
-.msg.mine { align-self: flex-end; align-items: flex-end; }
-.who { font-size: 12px; color: var(--ion-color-medium); margin-bottom: 2px; }
-.bubble {
-  background: var(--ion-color-step-100, #f3f3f3);
-  padding: 8px 12px;
-  border-radius: 2px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+/* 聊天背景：颜色 / 图片 / 透明度由「外观」设置决定（见 theme/appearance.ts） */
+ion-content { --background: var(--chat-bg); }
+ion-content.plain { --background: var(--md-surface); }
+
+.head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.head .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.msgs { display: flex; flex-direction: column; gap: 6px; padding: 12px 12px 16px; }
+.more { align-self: center; margin: 6px 0; }
+.day {
+  align-self: center; margin: 8px 0 4px; padding: 3px 12px; border-radius: 12px;
+  background: var(--pill-bg); color: var(--pill-fg); font-size: 12px;
 }
-.msg.mine .bubble { background: var(--ion-color-primary); color: var(--ion-color-primary-contrast); }
-.msg.flash .bubble { outline: 2px solid var(--ion-color-primary); outline-offset: 2px; }
-.time { font-size: 11px; color: var(--ion-color-medium); margin-top: 2px; }
-.note { padding: 4px 16px; font-size: 12px; color: var(--ion-color-danger); }
-.composer { display: flex; align-items: center; gap: 8px; padding: 0 8px; }
-.composer ion-input { flex: 1; }
+.msg { max-width: 84%; display: flex; flex-direction: column; align-items: flex-start; }
+.msg.mine { align-self: flex-end; align-items: flex-end; }
+
+/* 气泡：颜色由变量决定，文字颜色与气泡颜色成对选取，保证看得清 */
+.bubble {
+  background: var(--in-bg);
+  color: var(--in-fg);
+  padding: 8px 12px 6px;
+  min-width: 64px;
+  border-radius: 18px 18px 18px 4px;
+  box-shadow: 0 0 0 1px var(--bubble-edge), 0 1px 2px rgba(0, 0, 0, 0.18);
+  /* 长按由我们自己处理，避免系统的选字菜单抢先弹出 */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: pan-y;
+}
+.msg.mine .bubble { background: var(--out-bg); color: var(--out-fg); border-radius: 18px 18px 4px 18px; }
+.msg.flash .bubble { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+.who { font-size: 12px; font-weight: 500; opacity: 0.85; margin-bottom: 2px; }
+.body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.4; }
+.meta { font-size: 11px; opacity: 0.7; text-align: right; margin-top: 2px; }
+
+.note { padding: 4px 16px; font-size: 12px; color: var(--md-error); }
+.composer { display: flex; align-items: flex-end; gap: 8px; padding: 4px 8px; }
+.ta {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  height: 48px;
+  max-height: 132px;
+  padding: 12px 16px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  border-radius: 24px;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  font: inherit;
+  font-size: 16px;
+  line-height: 24px;
+  white-space: pre-wrap;        /* 按宽度自动换行 */
+  overflow-wrap: anywhere;
+  overflow-y: hidden;
+}
+.ta::placeholder { color: var(--md-on-surface-variant); }
+.send { --padding-start: 0; --padding-end: 0; --border-radius: 16px; width: 48px; height: 48px; margin: 0; }
 </style>
