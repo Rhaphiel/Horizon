@@ -85,3 +85,20 @@ ion-modal.m3-dialog.tall { --height: 72vh; }
 
 /* ---- 头像 / 小标题 ---- */
 .section-title { color: var(--md-primary); font-size: 13px; font-weight: 500; letter-spacing: 0.02em; text-transform: none; }
+
+/* ---- 一体化：所有页面同一块底色，头部不再有分割条 / 阴影 / 灰块 ---- */
+ion-header { box-shadow: none; }
+ion-header ion-toolbar { --background: var(--md-surface); --border-width: 0; }
+ion-toolbar.md { --border-width: 0; }
+ion-content { --background: var(--md-surface); }
+ion-list { background: transparent; padding-top: 0; padding-bottom: 0; }
+ion-item { --background: transparent; }
+
+/* 搜索框统一成 46 高胶囊，左右留白和列表对齐 */
+ion-searchbar {
+  --border-radius: 999px;
+  --box-shadow: none;
+  --height: 46px;
+  padding: 0 12px 8px;
+}
+
