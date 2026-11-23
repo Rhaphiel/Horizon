@@ -97,8 +97,29 @@ ion-item { --background: transparent; }
 /* 搜索框统一成 46 高胶囊，左右留白和列表对齐 */
 ion-searchbar {
   --border-radius: 999px;
-  --box-shadow: none;
+  --box-shadow: none !important;
   --height: 46px;
   padding: 0 12px 8px;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+
+/* 硬性去掉头部/搜索栏周边的灰块与阴影，保证页面连成一片 */
+ion-header,
+ion-toolbar {
+  box-shadow: none !important;
+  border: 0 !important;
+  --border-width: 0 !important;
+}
+ion-header::after,
+ion-header::before,
+ion-toolbar::after,
+ion-toolbar::before { display: none !important; background: none !important; }
+
+/* searchbar 内层也不许有阴影 */
+ion-searchbar .searchbar-input-container,
+ion-searchbar .searchbar-input {
+  box-shadow: none !important;
 }
 
