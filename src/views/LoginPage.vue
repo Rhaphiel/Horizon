@@ -43,7 +43,7 @@
           v-model="password"
           class="m3-field"
           fill="outline"
-          label="密码（至少 6 位）"
+          :label="mode === 'login' ? '密码' : '密码（至少 6 位）'"
           label-placement="floating"
           type="password"
           :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"

@@ -30,7 +30,9 @@ const style = computed(() => ({
 
 <style scoped>
 .avatar {
-  flex: none;
+  flex: 0 0 auto;
+  aspect-ratio: 1 / 1;
+  min-width: 0;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -44,6 +46,7 @@ const style = computed(() => ({
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   display: block;
 }
 </style>

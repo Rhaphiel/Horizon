@@ -7,11 +7,17 @@ import { session } from '@/stores/session';
 
 const BUCKET = 'avatars';
 
-// 只允许静态图片。视频、GIF 一律拒绝（GIF 虽然能取首帧，但容易被当成“会动的头像”）
-const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
+// 只允许静态图片：拒绝视频和 GIF。
+// 手机相册/文件选择器经常给出奇怪的类型（空字符串、image/jpg、image/heic 等），
+// 所以这里改成「黑名单式」判断，避免误杀正常照片。
+const STATIC_EXT = /\.(jpe?g|png|webp|heic|heif)$/i;
 
 export function isStaticImage(file: File): boolean {
-  return ALLOWED.has(file.type);
+  const type = (file.type || '').toLowerCase();
+  if (type.startsWith('video/')) return false;
+  if (type === 'image/gif') return false;
+  if (type.startsWith('image/')) return true;        // jpeg/png/webp/heic/…
+  return STATIC_EXT.test(file.name || '');          // 类型为空时按扩展名判断
 }
 
 export async function compressImage(file: File, max = 512): Promise<Blob> {

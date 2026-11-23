@@ -1,31 +1,33 @@
 <template>
-  <div v-if="open" class="cropper-mask">
-    <div class="cropper-bar">
-      <button class="txt" type="button" @click="onCancel">取消</button>
-      <span class="title">{{ title }}</span>
-      <button class="done" type="button" :disabled="!ready" @click="onDone">完成</button>
-    </div>
+  <Teleport to="body">
+    <div v-if="open" class="cropper-mask">
+      <div class="cropper-bar">
+        <button class="txt" type="button" @click="onCancel">取消</button>
+        <span class="title">{{ title }}</span>
+        <button class="done" type="button" :disabled="!ready" @click="onDone">完成</button>
+      </div>
 
-    <!-- 圆形裁剪区：拖动移动，双指/滚轮/滑杆缩放 -->
-    <div
-      ref="stageEl"
-      class="stage"
-      @pointerdown="onDown"
-      @pointermove="onMove"
-      @pointerup="onUp"
-      @pointercancel="onUp"
-      @wheel.prevent="onWheel"
-    >
-      <img ref="imgEl" class="pic" :src="src" alt="" :style="picStyle" draggable="false" />
-      <div class="ring" :style="ringStyle" />
-      <div class="hint">拖动移动 · 双指或滚轮缩放</div>
-    </div>
+      <!-- 圆形裁剪区：拖动移动，双指/滚轮/滑杆缩放 -->
+      <div
+        ref="stageEl"
+        class="stage"
+        @pointerdown="onDown"
+        @pointermove="onMove"
+        @pointerup="onUp"
+        @pointercancel="onUp"
+        @wheel.prevent="onWheel"
+      >
+        <img ref="imgEl" class="pic" :src="src" alt="" :style="picStyle" draggable="false" />
+        <div class="ring" :style="ringStyle" />
+        <div class="hint">拖动移动 · 双指或滚轮缩放</div>
+      </div>
 
-    <div class="zoom">
-      <span>缩放</span>
-      <input type="range" min="1" max="3" step="0.01" :value="zoom" @input="onSlider" />
+      <div class="zoom">
+        <span>缩放</span>
+        <input type="range" min="1" max="4" step="0.01" :value="zoom" @input="onSlider" />
+      </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -35,7 +37,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 const props = withDefaults(defineProps<{ open: boolean; src: string; title?: string }>(), {
   title: '移动和缩放',
 });
-const emit = defineEmits<{ cancel: []; done: [blob: Blob] }>();
+const emit = defineEmits<{ cancel: []; done: [blob: Blob]; failed: [] }>();
 
 const stageEl = ref<HTMLDivElement | null>(null);
 const imgEl = ref<HTMLImageElement | null>(null);
@@ -49,7 +51,7 @@ const ty = ref(0);
 const ready = ref(false);
 
 // 图片按“铺满裁剪区”为基准缩放
-const baseScale = computed(() => (natW.value && natH.value ? stage.value / Math.min(natW.value, natH.value) : 1));
+const baseScale = computed(() => (natW.value && natH.value ? stage.value / Math.max(natW.value, natH.value) : 1));
 const dispW = computed(() => natW.value * baseScale.value * zoom.value);
 const dispH = computed(() => natH.value * baseScale.value * zoom.value);
 
@@ -94,7 +96,10 @@ function loadImage(): void {
       ready.value = true;
     });
   };
-  img.onerror = () => { ready.value = false; };
+  img.onerror = () => {
+    ready.value = false;
+    emit('failed');          // 手机选了 HEIC 等浏览器解不了的格式
+  };
   img.src = props.src;
 }
 
@@ -128,7 +133,7 @@ function onMove(e: PointerEvent): void {
   if (pointers.size === 2 && pinchStart) {
     const [a, b] = [...pointers.values()];
     const dist = Math.hypot(a.x - b.x, a.y - b.y);
-    zoom.value = Math.min(3, Math.max(1, pinchStart.zoom * (dist / pinchStart.dist)));
+    zoom.value = Math.min(4, Math.max(1, pinchStart.zoom * (dist / pinchStart.dist)));
     clampOffsets();
     return;
   }
@@ -146,7 +151,7 @@ function onUp(e: PointerEvent): void {
 }
 
 function onWheel(e: WheelEvent): void {
-  zoom.value = Math.min(3, Math.max(1, zoom.value * (e.deltaY > 0 ? 0.94 : 1.06)));
+  zoom.value = Math.min(4, Math.max(1, zoom.value * (e.deltaY > 0 ? 0.94 : 1.06)));
   clampOffsets();
 }
 
@@ -162,7 +167,7 @@ function onCancel(): void {
 
 function onDone(): void {
   const img = imgEl.value;
-  if (!img || !ready.value) return;
+  if (!img || !ready.value || stage.value <= 0) return;
   const OUT = 512;
   const k = OUT / stage.value;
   const canvas = document.createElement('canvas');
@@ -170,6 +175,9 @@ function onDone(): void {
   canvas.height = OUT;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
+
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, OUT, OUT);
 
   ctx.save();
   ctx.beginPath();
@@ -190,7 +198,7 @@ function onDone(): void {
 .cropper-mask {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: 9999;
   background: #000;
   display: flex;
   flex-direction: column;
@@ -225,7 +233,17 @@ function onDone(): void {
   align-items: center;
   justify-content: center;
 }
-.pic { position: absolute; user-select: none; -webkit-user-drag: none; }
+/* Ionic / normalize 的全局 img{max-width:100%} 会把放大后的图横向压回来，
+   这里显式解除，否则放大就等于“压扁” */
+.pic {
+  position: absolute;
+  max-width: none;
+  max-height: none;
+  width: auto;
+  height: auto;
+  user-select: none;
+  -webkit-user-drag: none;
+}
 .ring {
   position: absolute;
   border-radius: 50%;

@@ -18,7 +18,7 @@
           </button>
           <p class="ava-tip">{{ isOwner ? (uploading ? '上传中…' : '点群头像可更换') : '' }}</p>
           <input ref="fileEl" type="file" accept="image/jpeg,image/png,image/webp" hidden @change="onAvatarPick" />
-          <AvatarCropper :open="cropOpen" :src="cropSrc" @cancel="closeCrop" @done="onCropped" />
+          <AvatarCropper :open="cropOpen" :src="cropSrc" @cancel="closeCrop" @done="onCropped" @failed="onCropFailed" />
         </div>
 
         <ion-list>
@@ -128,6 +128,11 @@ function onAvatarPick(e: Event): void {
   }
   cropSrc.value = URL.createObjectURL(file);
   cropOpen.value = true;
+}
+
+function onCropFailed(): void {
+  closeCrop();
+  void showToast('这张图片格式不支持，请换一张 JPG / PNG');
 }
 
 async function onCropped(blob: Blob): Promise<void> {

@@ -13,7 +13,7 @@
           <span class="avatar-hint">{{ uploading ? '上传中…' : '点击更换头像' }}</span>
         </button>
         <input ref="fileEl" type="file" accept="image/jpeg,image/png,image/webp" hidden @change="onPick" />
-        <AvatarCropper :open="cropOpen" :src="cropSrc" @cancel="closeCrop" @done="onCropped" />
+        <AvatarCropper :open="cropOpen" :src="cropSrc" @cancel="closeCrop" @done="onCropped" @failed="onCropFailed" />
         <div class="hero-name">{{ session.username || '—' }}</div>
       </div>
 
@@ -102,6 +102,12 @@ function onPick(e: Event): void {
   }
   cropSrc.value = URL.createObjectURL(file);
   cropOpen.value = true;
+}
+
+// 图片解不开（HEIC / 损坏文件等）
+function onCropFailed(): void {
+  closeCrop();
+  void showToast('这张图片格式不支持，请换一张 JPG / PNG');
 }
 
 // 裁剪完成 → 上传
