@@ -134,6 +134,9 @@ export const bubbleVars = computed<Record<string, string>>(() => {
     '--in-fg': b.incoming.fg,
     '--out-bg': b.outgoing.bg,
     '--out-fg': b.outgoing.fg,
+    // Material You 渐变：用主题色在气泡基色上再混一档，形成有方向的渐变
+    '--in-bg2': mix(b.incoming.bg, s.tertiary, 0.34),
+    '--out-bg2': mix(b.outgoing.bg, s.tertiaryContainer, 0.42),
     '--bubble-edge': rgba(isDark.value ? '#ffffff' : '#000000', 0.12),
     '--chat-bg': chatBackground.value,
     '--pill-bg': s.surfaceContainerHigh,

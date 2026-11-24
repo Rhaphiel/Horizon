@@ -5,7 +5,7 @@ export const PAGE = 50;            // 每次加载多少条
 export const AROUND_BEFORE = 30;   // 跳转到某条消息时，往前加载多少条
 export const AROUND_AFTER = 200;   // 往后最多加载多少条
 
-const COLS = 'id,conversation_id,sender_id,body,created_at,media_type,media_path,media_name,media_mime,media_size,media_duration,expires_at,is_expired,recalled_at' as const;
+const COLS = 'id,conversation_id,sender_id,body,created_at,media_type,media_path,media_name,media_mime,media_size,media_duration,expires_at,is_expired,recalled_at,reply_to,reply_preview' as const;
 
 export const fetchLatest = (cid: string) =>
   db.from('messages').select(COLS).eq('conversation_id', cid)
@@ -34,9 +34,14 @@ export const recallMessage = (id: string) =>
   db.from('messages').update({ recalled_at: new Date().toISOString() })
     .eq('id', id).select(COLS).single();
 
-export const sendMessage = (cid: string, senderId: string, body: string) =>
-  db.from('messages').insert({ conversation_id: cid, sender_id: senderId, body })
-    .select(COLS).single();
+export const sendMessage = (cid: string, senderId: string, body: string, replyTo?: string, replyPreview?: string) =>
+  db.from('messages').insert({
+    conversation_id: cid,
+    sender_id: senderId,
+    body,
+    reply_to: replyTo ?? null,
+    reply_preview: replyPreview ?? null,
+  }).select(COLS).single();
 
 // 搜索消息：传 cid 只搜这个聊天，不传搜所有聊天（数据库的行级安全保证只能搜到自己有权看的）
 export function searchMessages(kw: string, cid?: string) {

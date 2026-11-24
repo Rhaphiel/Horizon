@@ -17,11 +17,11 @@
         <div class="hero">
           <button class="ava" type="button" :disabled="!isOwner || uploading" @click="pickAvatar">
             <Avatar :name="chat.name || '群聊'" :size="108" :src="chat.avatarUrl" />
-            <span v-if="isOwner" class="ava-edit">{{ uploading ? '…' : '改' }}</span>
+
           </button>
           <h1>{{ chat.name || '群聊' }}</h1>
           <p>{{ chat.members.length }} 位成员</p>
-          <span v-if="isOwner" class="ava-tip">点群头像可更换</span>
+
           <input ref="fileEl" type="file" accept="image/jpeg,image/png,image/webp" hidden @change="onAvatarPick" />
           <AvatarCropper :open="cropOpen" :src="cropSrc" @cancel="closeCrop" @done="onCropped" @failed="onCropFailed" />
         </div>
@@ -29,16 +29,16 @@
         <!-- 四个快捷操作 -->
         <div class="acts">
           <button type="button" @click="backToChat">
-            <span class="ico">💬</span><span>消息</span>
+            <ion-icon class="ico" :icon="chatbubbleEllipsesOutline" /><span>消息</span>
           </button>
           <button type="button" @click="toggleMute">
-            <span class="ico">{{ muted ? '🔕' : '🔔' }}</span><span>{{ muted ? '已静音' : '静音' }}</span>
+            <ion-icon class="ico" :icon="muted ? notificationsOffOutline : notificationsOutline" /><span>{{ muted ? '已静音' : '静音' }}</span>
           </button>
           <button type="button" disabled>
-            <span class="ico">📹</span><span>视频通话</span>
+            <ion-icon class="ico" :icon="videocamOutline" /><span>视频通话</span>
           </button>
           <button type="button" class="danger" @click="leave">
-            <span class="ico">⏏</span><span>退出</span>
+            <ion-icon class="ico" :icon="exitOutline" /><span>退出</span>
           </button>
         </div>
 
@@ -51,7 +51,10 @@
           <div v-for="m in members" :key="m.user_id" class="mem">
             <Avatar :name="nameOf(m.user_id)" :src="avatarOf(m.user_id)" :size="42" />
             <div class="mi">
-              <b>{{ nameOf(m.user_id) }}<em v-if="m.user_id === me">（我）</em></b>
+              <b>
+              <span :style="nameStyle(titleOf(m.user_id))">{{ nameOf(m.user_id) }}</span><em v-if="m.user_id === me">（我）</em>
+              <span v-if="titleOf(m.user_id)" class="ttl" :style="titleStyle(titleOf(m.user_id)!)">{{ titleOf(m.user_id)!.text }}</span>
+            </b>
               <small>{{ m.role === 'owner' ? '群主' : '成员' }}</small>
             </div>
             <span v-if="m.role === 'owner'" class="owner">所有者</span>
@@ -92,13 +95,14 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { IonPage, IonHeader, IonToolbar, IonButtons, IonButton, IonIcon, IonContent, useIonRouter, actionSheetController } from '@ionic/vue';
-import { arrowBack, ellipsisVertical } from 'ionicons/icons';
+import { arrowBack, chatbubbleEllipsesOutline, ellipsisVertical, exitOutline, notificationsOffOutline, notificationsOutline, videocamOutline } from 'ionicons/icons';
 import PickFriendsModal from '@/components/PickFriendsModal.vue';
 import Avatar from '@/components/Avatar.vue';
 import AvatarCropper from '@/components/AvatarCropper.vue';
 import { chatTitle, getChat, myRole, loadChats } from '@/stores/chats';
 import { friendState } from '@/stores/friends';
 import { nameOf, avatarOf } from '@/stores/directory';
+import { ensureTitles, titleOf, titleStyle, nameStyle } from '@/stores/titles';
 import { myId } from '@/stores/session';
 import { confirmDialog, showToast } from '@/lib/toast';
 import { uploadGroupAvatar, isStaticImage } from '@/services/avatarApi';
@@ -118,6 +122,7 @@ const tab = ref<'media' | 'links'>('media');
 const muted = ref(false);
 
 const me = computed(() => myId());
+
 const chat = computed(() => getChat(cid.value));
 const isOwner = computed(() => (chat.value ? myRole(chat.value) === 'owner' : false));
 
@@ -125,6 +130,8 @@ const isOwner = computed(() => (chat.value ? myRole(chat.value) === 'owner' : fa
 const members = computed(() =>
   [...(chat.value?.members ?? [])].sort((a, b) => (a.role === b.role ? 0 : a.role === 'owner' ? -1 : 1)),
 );
+
+watch(members, list => { void ensureTitles(list.map(m => m.user_id)); }, { immediate: true });
 
 // 可以添加的人：我的好友里，还不在这个群里的
 const candidates = computed(() => friendState.friends.filter(f => !chat.value?.members.some(m => m.user_id === f.id)));
@@ -340,4 +347,5 @@ watch(
   background: transparent; color: var(--md-on-surface); font-size: 14px;
 }
 .bottom .danger-text { color: #ff6b6b; border-color: rgba(255,107,107,.4); }
+.ttl { margin-left: 6px; padding: 1px 6px; border-radius: 8px; font-size: 11px; font-weight: 600; background: rgba(127,127,127,.16); }
 </style>

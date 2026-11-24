@@ -34,6 +34,7 @@ function closeUpdate(): void {
 }
 
 async function run(): Promise<void> {
+  if (localStorage.getItem('hz:update-push') === '0') return;   // 用户在「我的」里关掉了更新推送
   updateInfo.value = await checkUpdate();
 }
 

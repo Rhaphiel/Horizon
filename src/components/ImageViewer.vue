@@ -6,9 +6,9 @@
         <span class="idx">{{ index + 1 }} / {{ list.length }}</span>
       </div>
 
-      <div class="stage" @pointerdown="down" @pointermove="move" @pointerup="up" @pointercancel="up">
+      <div class="stage" @pointerdown="down" @pointermove="move" @pointerup="up" @pointercancel="up" @click.self="emit('close')">
         <div v-if="!url" class="loading">加载中…</div>
-        <img v-else :src="url" class="big" alt="图片" :style="style" draggable="false" @dblclick="zoom = zoom > 1 ? 1 : 2" />
+        <img v-else :src="url" class="big" alt="图片" :style="style" draggable="false" @click.stop @dblclick="zoom = zoom > 1 ? 1 : 2" />
       </div>
 
       <button v-if="index > 0" class="nav prev" type="button" aria-label="上一张" @click.stop="go(-1)">‹</button>
@@ -60,10 +60,12 @@ function go(delta: number): void {
 // 左右滑动切换（超过 60px 算一次）
 let startX = 0;
 let tracking = false;
+let fromEdge = false;
 function down(e: PointerEvent): void {
   if (zoom.value > 1) return;
   tracking = true;
   startX = e.clientX;
+  fromEdge = e.clientX < 32;   // 从左边缘开始滑 = 关闭
 }
 function move(e: PointerEvent): void {
   if (!tracking) return;
@@ -74,6 +76,7 @@ function up(): void {
   tracking = false;
   const dx = dragX.value;
   dragX.value = 0;
+  if (fromEdge && dx > 60) { emit('close'); return; }   // 边缘右滑：关闭查看器
   if (Math.abs(dx) > 60) go(dx < 0 ? 1 : -1);
 }
 

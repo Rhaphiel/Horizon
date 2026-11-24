@@ -156,3 +156,20 @@ ion-searchbar .searchbar-input {
   box-shadow: none !important;
 }
 
+
+/* ===== Liquid Glass：半透明 + 背景模糊 + 高光描边 ===== */
+.glass {
+  background: color-mix(in srgb, var(--md-surface) 62%, transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+/* 低版本 WebView 不支持 backdrop-filter 时退化成半透明纯色 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass {
+    background: var(--md-surface-container-high);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  }
+}

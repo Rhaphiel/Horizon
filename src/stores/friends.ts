@@ -54,10 +54,25 @@ export async function loadFriends(): Promise<string | null> {
 export async function searchUsers(q: string): Promise<{ rows: { id: string; username: string }[]; error: string | null }> {
   const me = session.user;
   if (!me) return { rows: [], error: null };
+  const text = q.trim();
+
+  // 纯数字 → 按 HorizonID 精确查（只返回一个人）
+  if (/^\d{5,}$/.test(text)) {
+    const { data, error } = await db.rpc('find_by_horizon_id', { hid: Number(text) });
+    if (error) return { rows: [], error: error.message };
+    const rows = ((data ?? []) as { id: string; username: string }[])
+      .filter(p => p.id !== me.id)
+      .map(p => {
+        names[p.id] = p.username;
+        return { id: p.id, username: `${p.username}（ID ${text}）` };
+      });
+    return { rows, error: null };
+  }
+
   const { data, error } = await db
     .from('profiles')
     .select('id,username')
-    .ilike('username', likePattern(q))
+    .ilike('username', likePattern(text))
     .neq('id', me.id)
     .limit(20);
   if (error) return { rows: [], error: error.message };

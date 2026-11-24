@@ -7,9 +7,9 @@ export type Database = {
   public: {
     Tables: {
       profiles: {
-        Row: { id: string; username: string; avatar_url: string | null; created_at: string };
-        Insert: { id: string; username: string; avatar_url?: string | null; created_at?: string };
-        Update: { id?: string; username?: string; avatar_url?: string | null; created_at?: string };
+        Row: { id: string; username: string; avatar_url: string | null; horizon_id: number | null; id_searchable: boolean; shown_title: string | null; created_at: string };
+        Insert: { id: string; username: string; avatar_url?: string | null; horizon_id?: number | null; id_searchable?: boolean; shown_title?: string | null; created_at?: string };
+        Update: { id?: string; username?: string; avatar_url?: string | null; horizon_id?: number | null; id_searchable?: boolean; shown_title?: string | null; created_at?: string };
         Relationships: [];
       };
       friendships: {
@@ -45,9 +45,9 @@ export type Database = {
         Relationships: [];
       };
       messages: {
-        Row: { id: string; conversation_id: string; sender_id: string; body: string; created_at: string; media_type: 'text' | 'image' | 'audio' | 'video' | 'file'; media_path: string | null; media_name: string | null; media_mime: string | null; media_size: number | null; media_duration: number | null; expires_at: string | null; is_expired: boolean; recalled_at: string | null };
-        Insert: { id?: string; conversation_id: string; sender_id: string; body: string; created_at?: string; media_type?: 'text' | 'image' | 'audio' | 'video' | 'file'; media_path?: string | null; media_name?: string | null; media_mime?: string | null; media_size?: number | null; media_duration?: number | null; expires_at?: string | null; is_expired?: boolean; recalled_at?: string | null };
-        Update: { body?: string; media_path?: string | null; is_expired?: boolean; recalled_at?: string | null };
+        Row: { id: string; conversation_id: string; sender_id: string; body: string; created_at: string; media_type: 'text' | 'image' | 'audio' | 'video' | 'file'; media_path: string | null; media_name: string | null; media_mime: string | null; media_size: number | null; media_duration: number | null; expires_at: string | null; is_expired: boolean; recalled_at: string | null; reply_to: string | null; reply_preview: string | null };
+        Insert: { id?: string; conversation_id: string; sender_id: string; body: string; created_at?: string; media_type?: 'text' | 'image' | 'audio' | 'video' | 'file'; media_path?: string | null; media_name?: string | null; media_mime?: string | null; media_size?: number | null; media_duration?: number | null; expires_at?: string | null; is_expired?: boolean; recalled_at?: string | null; reply_to?: string | null; reply_preview?: string | null };
+        Update: { body?: string; media_path?: string | null; is_expired?: boolean; recalled_at?: string | null; reply_to?: string | null; reply_preview?: string | null };
         Relationships: [];
       };
       push_tokens: {
@@ -74,10 +74,92 @@ export type Database = {
         Update: { token?: string; device_name?: string | null; updated_at?: string };
         Relationships: [];
       };
+      user_titles: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          gradient: boolean;
+          gradient_from: string | null;
+          gradient_to: string | null;
+          title_gradient: boolean;
+          title_from: string | null;
+          title_to: string | null;
+          name_gradient: boolean;
+          name_from: string | null;
+          name_to: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title: string;
+          gradient?: boolean;
+          gradient_from?: string | null;
+          gradient_to?: string | null;
+          title_gradient?: boolean;
+          title_from?: string | null;
+          title_to?: string | null;
+          name_gradient?: boolean;
+          name_from?: string | null;
+          name_to?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          title?: string;
+          gradient?: boolean;
+          gradient_from?: string | null;
+          gradient_to?: string | null;
+          title_gradient?: boolean;
+          title_from?: string | null;
+          title_to?: string | null;
+          name_gradient?: boolean;
+          name_from?: string | null;
+          name_to?: string | null;
+        };
+        Relationships: [];
+      };
     };
-    Views: { [_ in never]: never };
+    Views: {
+      profile_titles: {
+        Row: {
+          user_id: string;
+          username: string;
+          horizon_id: number | null;
+          title: string | null;
+          title_gradient: boolean | null;
+          title_from: string | null;
+          title_to: string | null;
+          name_gradient: boolean | null;
+          name_from: string | null;
+          name_to: string | null;
+          shown_title: string | null;
+        };
+        Relationships: [];
+      };
+    };
     Functions: {
       is_member: { Args: { conv: string }; Returns: boolean };
+      grant_title: {
+        Args: {
+          target_horizon_id: number;
+          new_title: string;
+          title_grad?: boolean;
+          title_from_hex?: string | null;
+          title_to_hex?: string | null;
+          name_grad?: boolean;
+          name_from_hex?: string | null;
+          name_to_hex?: string | null;
+        };
+        Returns: string;
+      };
+      is_owner: { Args: Record<PropertyKey, never>; Returns: boolean };
+      find_by_horizon_id: {
+        Args: { hid: number };
+        Returns: { id: string; username: string; avatar_url: string | null }[];
+      };
       create_dm: { Args: { friend: string }; Returns: string };
       create_group: { Args: { group_name: string; member_ids: string[] }; Returns: string };
       add_group_members: { Args: { conv: string; member_ids: string[] }; Returns: undefined };

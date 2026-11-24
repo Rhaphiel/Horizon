@@ -5,7 +5,7 @@
         <ion-title>好友</ion-title>
       </ion-toolbar>
       <ion-toolbar>
-        <ion-searchbar v-model="q" placeholder="按用户名搜索用户" :debounce="0" @keydown="onKey" @ionClear="clearSearch" />
+        <ion-searchbar v-model="q" placeholder="搜索用户名或 HorizonID" :debounce="0" @keydown="onKey" @ionClear="clearSearch" />
       </ion-toolbar>
     </ion-header>
 
@@ -13,6 +13,16 @@
       <ion-refresher slot="fixed" @ionRefresh="onRefresh">
         <ion-refresher-content />
       </ion-refresher>
+
+      <!-- ID 可见性开关（100001 不显示） -->
+      <div v-if="idToggleVisible" class="id-toggle">
+        <ion-toggle
+          :checked="idSearchable"
+          label-placement="start"
+          justify="space-between"
+          @ionChange="onToggleIdSearch"
+        >允许别人通过 ID 找到我</ion-toggle>
+      </div>
 
       <!-- 搜索结果（不在折叠分组里，搜完立即可见） -->
       <template v-if="results !== null">
@@ -39,7 +49,10 @@
         <ion-list v-show="open.incoming">
           <ion-item v-for="f in friendState.incoming" :key="f.rowId">
             <Avatar slot="start" :name="f.name" :size="44" :src="avatarOf(f.id)" />
-            <ion-label>{{ f.name }}</ion-label>
+            <ion-label>
+              <span :style="nameStyle(titleOf(f.id))">{{ f.name }}</span>
+              <span v-if="titleOf(f.id)" class="ttl" :style="titleStyle(titleOf(f.id)!)">{{ titleOf(f.id)!.text }}</span>
+            </ion-label>
             <ion-button slot="end" size="small" fill="outline" @click="accept(f.rowId)">同意</ion-button>
             <ion-button slot="end" size="small" fill="clear" @click="remove(f.rowId)">拒绝</ion-button>
           </ion-item>
@@ -57,7 +70,10 @@
         <ion-list v-show="open.friends">
           <ion-item v-for="f in friendState.friends" :key="f.rowId" :detail="false">
             <Avatar slot="start" :name="f.name" :size="44" :src="avatarOf(f.id)" />
-            <ion-label>{{ f.name }}</ion-label>
+            <ion-label>
+              <span :style="nameStyle(titleOf(f.id))">{{ f.name }}</span>
+              <span v-if="titleOf(f.id)" class="ttl" :style="titleStyle(titleOf(f.id)!)">{{ titleOf(f.id)!.text }}</span>
+            </ion-label>
             <ion-button slot="end" size="small" fill="clear" color="danger" @click="removeFriend(f)">删除</ion-button>
           </ion-item>
           <ion-item v-if="!friendState.friends.length" lines="none"><ion-label color="medium">还没有好友，先搜索添加吧</ion-label></ion-item>
@@ -74,7 +90,10 @@
         <ion-list v-show="open.outgoing">
           <ion-item v-for="f in friendState.outgoing" :key="f.rowId">
             <Avatar slot="start" :name="f.name" :size="44" :src="avatarOf(f.id)" />
-            <ion-label>{{ f.name }}</ion-label>
+            <ion-label>
+              <span :style="nameStyle(titleOf(f.id))">{{ f.name }}</span>
+              <span v-if="titleOf(f.id)" class="ttl" :style="titleStyle(titleOf(f.id)!)">{{ titleOf(f.id)!.text }}</span>
+            </ion-label>
             <ion-button slot="end" size="small" fill="clear" @click="remove(f.rowId)">撤回</ion-button>
           </ion-item>
           <ion-item v-if="!friendState.outgoing.length" lines="none"><ion-label color="medium">暂无</ion-label></ion-item>
@@ -85,20 +104,75 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { IonPage, IonHeader, IonToolbar, IonTitle, IonSearchbar, IonContent, IonRefresher, IonRefresherContent, IonList, IonItem, IonLabel, IonButton, IonIcon } from '@ionic/vue';
 import { chevronDown, chevronForward } from 'ionicons/icons';
 import { friendState, loadFriends, searchUsers, sendRequest, acceptRequest, removeFriendship } from '@/stores/friends';
 import type { FriendRow } from '@/stores/friends';
 import Avatar from '@/components/Avatar.vue';
 import { avatarOf, ensureAvatars } from '@/stores/directory';
+import { ensureTitles, titleOf, titleStyle, nameStyle } from '@/stores/titles';
 import { confirmDialog, showToast } from '@/lib/toast';
+import { db } from '@/lib/supabase';
+import { myId } from '@/stores/session';
 
 const q = ref('');
+
+// ---- ID 可见性 ----
+const horizonId = ref<number | null>(null);
+const idSearchable = ref(true);
+const profileLoaded = ref(false);
+const idToggleVisible = computed(() => profileLoaded.value);   // 所有人都有这个开关
+
+const ME_KEY = 'hz:me:profile';
+
+function readCache(uid: string): { id: string; horizonId: number | null; idSearchable: boolean } | null {
+  try {
+    const raw = localStorage.getItem(ME_KEY);
+    if (!raw) return null;
+    const c = JSON.parse(raw) as { id: string; horizonId: number | null; idSearchable: boolean };
+    return c.id === uid ? c : null;
+  } catch {
+    return null;
+  }
+}
+
+async function loadIdPrefs(): Promise<void> {
+  const uid = myId();
+  if (!uid) return;
+  const { data } = await db.from('profiles').select('horizon_id,id_searchable').eq('id', uid).maybeSingle();
+  horizonId.value = (data?.horizon_id as number | undefined) ?? null;
+  idSearchable.value = (data?.id_searchable as boolean | undefined) ?? true;
+  profileLoaded.value = true;
+  try {
+    localStorage.setItem(ME_KEY, JSON.stringify({ id: uid, horizonId: horizonId.value, idSearchable: idSearchable.value }));
+  } catch { /* 忽略 */ }
+}
+
+async function onToggleIdSearch(ev: CustomEvent): Promise<void> {
+  const uid = myId();
+  if (!uid) return;
+  idSearchable.value = !!(ev.detail as { checked: boolean }).checked;
+  const { error } = await db.from('profiles').update({ id_searchable: idSearchable.value }).eq('id', uid);
+  if (error) { void showToast('保存失败：' + error.message); return; }
+  try {
+    localStorage.setItem(ME_KEY, JSON.stringify({ id: uid, horizonId: horizonId.value, idSearchable: idSearchable.value }));
+  } catch { /* 忽略 */ }
+  void showToast(idSearchable.value ? '别人可以通过 ID 找到你' : '已关闭 ID 查找');
+}
 const results = ref<{ id: string; username: string }[] | null>(null);
 
 // 分组展开状态：我的好友默认展开，其余默认收起
 const open = reactive({ incoming: false, friends: true, outgoing: false });
+
+onMounted(() => {
+  const uid = myId();
+  if (uid) {
+    const c = readCache(uid);
+    if (c) { horizonId.value = c.horizonId; idSearchable.value = c.idSearchable; profileLoaded.value = true; }
+  }
+  void loadIdPrefs();
+});
 function toggle(key: keyof typeof open): void {
   open[key] = !open[key];
 }
@@ -156,6 +230,12 @@ async function removeFriend(f: FriendRow): Promise<void> {
 </script>
 
 <style scoped>
+.id-toggle {
+  padding: 4px 16px 10px;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.12);
+  margin-bottom: 4px;
+}
+.id-toggle ion-toggle { font-size: 14px; }
 ion-item :deep(.avatar) { margin-right: 14px; }
 .sub { color: var(--md-on-surface-variant); font-size: 12px; margin-left: 6px; }
 
@@ -178,4 +258,5 @@ ion-item :deep(.avatar) { margin-right: 14px; }
 .group-name { flex: 1; font-weight: 500; }
 .group-count { font-size: 12px; color: var(--md-on-surface-variant); }
 .group ion-list { padding-top: 0; }
+.ttl { margin-left: 6px; padding: 1px 6px; border-radius: 8px; font-size: 11px; font-weight: 600; background: rgba(127,127,127,.16); }
 </style>

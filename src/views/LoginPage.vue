@@ -15,7 +15,7 @@
             v-model="identifier"
             class="m3-field"
             fill="outline"
-            label="用户名或邮箱"
+            label="用户名 / HorizonID / 邮箱"
             label-placement="floating"
             autocomplete="username"
             autocapitalize="off"

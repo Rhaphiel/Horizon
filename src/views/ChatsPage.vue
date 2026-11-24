@@ -4,7 +4,7 @@
       <ion-toolbar v-if="!searchMode">
         <ion-title>聊天</ion-title>
         <ion-buttons slot="end">
-          <ion-button aria-label="新建群聊" @click="groupOpen = true">
+          <ion-button aria-label="更多" @click="openPlus">
             <ion-icon slot="icon-only" :icon="add" />
           </ion-button>
         </ion-buttons>
@@ -97,7 +97,14 @@
         <ion-item v-for="c in sortedChats" :key="c.id" button :detail="false" lines="none" class="row" @click="openChat(c.id)">
           <Avatar slot="start" :name="chatTitle(c)" :size="56" :src="chatAvatar(c)" />
           <ion-label>
-            <h2>{{ chatTitle(c) }}</h2>
+            <h2>
+              <span :style="nameStyle(titleOf(peerId(c)))">{{ chatTitle(c) }}</span>
+              <span
+                v-if="titleOf(peerId(c))"
+                class="ttl"
+                :style="titleStyle(titleOf(peerId(c))!)"
+              >{{ titleOf(peerId(c))!.text }}</span>
+            </h2>
             <p>{{ preview(c) }}</p>
           </ion-label>
           <div slot="end" class="end">
@@ -107,6 +114,84 @@
         </ion-item>
       </ion-list>
       <div v-else-if="chats.loaded" class="empty-tip">还没有聊天。点右上角 + 新建群聊，或在“好友”里点好友开聊。</div>
+
+      <Teleport to="body">
+      <div v-if="plusOpen" class="menu-backdrop" @click="plusOpen = false" />
+      <div v-if="plusOpen" class="plus-pop glass" :style="plusPos">
+        <button type="button" @click="menuCreateGroup">
+          <ion-icon :icon="chatbubbleEllipsesOutline" /><span>创建群聊</span>
+        </button>
+        <button type="button" @click="menuAddFriend">
+          <ion-icon :icon="personAddOutline" /><span>加好友/群</span>
+        </button>
+        <button v-if="isOwner" type="button" @click="menuGrantTitle">
+          <ion-icon :icon="ribbonOutline" /><span>为用户添加称号</span>
+        </button>
+      </div>
+      </Teleport>
+
+      <!-- 称号管理（仅 100001 可见） -->
+      <div v-if="grantOpen" class="grant-mask" @click.self="closeGrant">
+        <div class="grant-card">
+          <h3>{{ editingId ? '修改称号' : '称号管理' }}</h3>
+
+          <label>用户 HorizonID
+            <div class="id-row">
+              <input v-model="grantId" inputmode="numeric" />
+              <button type="button" class="mini" @click="loadTargetTitles">查询</button>
+            </div>
+          </label>
+
+          <!-- 该用户已有的称号 -->
+          <div v-if="targetName" class="titles-list">
+            <div class="tl-head">给「{{ targetName }}」的称号</div>
+            <p v-if="!targetTitles.length" class="tl-empty">还没有称号</p>
+            <div v-for="t in targetTitles" :key="t.id" class="tl-row">
+              <span class="chip" :style="titleStyle(t)">{{ t.text }}</span>
+              <button type="button" class="mini" @click="editTitle(t)">修改</button>
+              <button type="button" class="mini danger" @click="removeTitle(t)">删除</button>
+            </div>
+          </div>
+
+          <label>{{ editingId ? '改成（10 字以内）' : '新称号（10 字以内）' }}
+            <input v-model="grantText" maxlength="10" />
+          </label>
+          <label class="row-check">
+            <input v-model="titleGrad" type="checkbox" /> 称号渐变
+          </label>
+          <div v-if="titleGrad" class="colors">
+            <input v-model="titleFrom" type="color" />
+            <input v-model="titleTo" type="color" />
+          </div>
+
+          <label class="row-check">
+            <input v-model="nameGrad" type="checkbox" /> 用户名渐变
+          </label>
+          <div v-if="nameGrad" class="colors">
+            <input v-model="nameFrom" type="color" />
+            <input v-model="nameTo" type="color" />
+          </div>
+
+          <!-- 预览 -->
+          <div v-if="previewOn" class="preview">
+            <span class="pv-label">预览</span>
+            <div class="pv-row">
+              <Avatar :name="targetName || '用户名'" :size="34" :src="targetAvatar" />
+              <span class="pv-name" :style="previewNameStyle">{{ targetName || '用户名' }}</span>
+              <span v-if="grantText.trim()" class="chip" :style="previewChipStyle">{{ grantText.trim() }}</span>
+            </div>
+          </div>
+
+          <div class="grant-actions">
+            <button v-if="editingId" type="button" @click="cancelEdit">取消修改</button>
+            <button type="button" class="mini" @click="previewOn = !previewOn">{{ previewOn ? '隐藏预览' : '预览' }}</button>
+            <button type="button" @click="closeGrant">{{ editingId ? '关闭' : '取消' }}</button>
+            <button type="button" class="primary" :disabled="grantBusy" @click="doGrant">
+              {{ editingId ? '保存修改' : '授予' }}
+            </button>
+          </div>
+        </div>
+      </div>
 
       <PickFriendsModal
         :open="groupOpen"
@@ -124,9 +209,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { IonPage, IonHeader, IonToolbar, IonTitle, IonButton, IonButtons, IonSearchbar, IonContent, IonRefresher, IonRefresherContent, IonList, IonItem, IonLabel, IonIcon } from '@ionic/vue';
-import { add, arrowBack, chevronForward } from 'ionicons/icons';
+import { add, arrowBack, chatbubbleEllipsesOutline, chevronForward, personAddOutline, ribbonOutline } from 'ionicons/icons';
 import Avatar from '@/components/Avatar.vue';
 import PickFriendsModal from '@/components/PickFriendsModal.vue';
 import { chats, sortedChats, chatTitle, getChat, loadChats } from '@/stores/chats';
@@ -134,6 +220,10 @@ import type { Chat } from '@/stores/chats';
 import { friendState, loadFriends } from '@/stores/friends';
 import { nameOf, avatarOf } from '@/stores/directory';
 import { myId } from '@/stores/session';
+import { db } from '@/lib/supabase';
+import { ensureTitles, titleOf, titleStyle, nameStyle, loadMyTitles } from '@/stores/titles';
+import type { OwnedTitle } from '@/stores/titles';
+import { confirmDialog } from '@/lib/toast';
 import { fmtDateTime, fmtTime, fmtDay, highlightParts, makeSnippet, oneLine } from '@/lib/format';
 import { showToast } from '@/lib/toast';
 import { searchMessages } from '@/services/messagesApi';
@@ -141,10 +231,178 @@ import { createGroup } from '@/services/chatApi';
 import { openChat as goChat } from '@/services/navigation';
 import type { MessageRow } from '@/types/database';
 
+const router = useRouter();
+onMounted(() => {
+  void loadOwner();
+});
+
 const kw = ref('');
 const lastKw = ref('');
 const hits = ref<MessageRow[] | null>(null);
 const groupOpen = ref(false);
+const plusOpen = ref(false);
+const isOwner = ref(false);
+const grantOpen = ref(false);
+const grantId = ref('');
+const grantText = ref('');
+const titleGrad = ref(false);
+const titleFrom = ref('#ff6b6b');
+const titleTo = ref('#f7b267');
+const nameGrad = ref(false);
+const nameFrom = ref('#6ea8fe');
+const nameTo = ref('#c084fc');
+const grantBusy = ref(false);
+const editingId = ref<string | null>(null);
+const targetUserId = ref<string | null>(null);
+const targetName = ref('');
+const targetTitles = ref<OwnedTitle[]>([]);
+const targetAvatar = ref<string | null>(null);
+const previewOn = ref(false);
+
+// 预览用的样式（不写入数据库，只是看一眼效果）
+const previewChipStyle = computed(() => titleStyle({
+  text: grantText.value.trim() || '称号',
+  titleGradient: titleGrad.value,
+  titleFrom: titleFrom.value,
+  titleTo: titleTo.value,
+  nameGradient: false,
+  nameFrom: null,
+  nameTo: null,
+}));
+const previewNameStyle = computed(() => (nameGrad.value
+  ? {
+      backgroundImage: 'linear-gradient(90deg, ' + nameFrom.value + ', ' + nameTo.value + ')',
+      webkitBackgroundClip: 'text',
+      backgroundClip: 'text',
+      color: 'transparent',
+    }
+  : {}));
+
+async function loadTargetTitles(): Promise<void> {
+  const hid = Number(grantId.value.trim());
+  if (!hid) { void showToast('先填一个 HorizonID'); return; }
+  const { data, error } = await db.from('profiles').select('id,username,avatar_url').eq('horizon_id', hid).maybeSingle();
+  if (error) { void showToast('查询失败：' + error.message); return; }
+  if (!data) {
+    targetUserId.value = null;
+    targetName.value = '';
+    targetTitles.value = [];
+    void showToast('没有这个 HorizonID');
+    return;
+  }
+  targetUserId.value = data.id as string;
+  targetName.value = data.username as string;
+  targetAvatar.value = (data.avatar_url as string | null) ?? null;
+  targetTitles.value = await loadMyTitles(data.id as string);
+}
+
+function editTitle(t: OwnedTitle): void {
+  editingId.value = t.id;
+  grantText.value = t.text;
+  titleGrad.value = t.titleGradient;
+  nameGrad.value = t.nameGradient;
+  if (t.titleFrom) titleFrom.value = t.titleFrom;
+  if (t.titleTo) titleTo.value = t.titleTo;
+  if (t.nameFrom) nameFrom.value = t.nameFrom;
+  if (t.nameTo) nameTo.value = t.nameTo;
+}
+
+function cancelEdit(): void {
+  editingId.value = null;
+  grantText.value = '';
+  titleGrad.value = false;
+  nameGrad.value = false;
+}
+
+function closeGrant(): void {
+  grantOpen.value = false;
+  cancelEdit();
+  targetUserId.value = null;
+  targetName.value = '';
+  targetTitles.value = [];
+}
+
+async function removeTitle(t: OwnedTitle): Promise<void> {
+  if (!(await confirmDialog('删除称号', '确定删除称号「' + t.text + '」吗？', '删除'))) return;
+  const { error } = await db.from('user_titles').delete().eq('id', t.id);
+  if (error) { void showToast('删除失败：' + error.message); return; }
+  void showToast('已删除');
+  if (grantId.value.trim()) await loadTargetTitles();
+}
+
+async function loadOwner(): Promise<void> {
+  const uid = myId();
+  if (!uid) return;
+  const { data, error } = await db.from('profiles').select('horizon_id').eq('id', uid).maybeSingle();
+  if (error) console.warn('[owner] ' + error.message);
+  console.info('[owner] horizon_id =', data?.horizon_id);
+  isOwner.value = Number(data?.horizon_id) === 100001;
+}
+
+function menuGrantTitle(): void {
+  plusOpen.value = false;
+  grantOpen.value = true;
+}
+
+async function doGrant(): Promise<void> {
+  if (editingId.value) {
+    const id = editingId.value;
+    const text = grantText.value.trim();
+    if (!text) { void showToast('称号不能为空'); return; }
+    grantBusy.value = true;
+    const { error } = await db.from('user_titles').update({
+      title: text,
+      title_gradient: titleGrad.value,
+      title_from: titleGrad.value ? titleFrom.value : null,
+      title_to: titleGrad.value ? titleTo.value : null,
+      name_gradient: nameGrad.value,
+      name_from: nameGrad.value ? nameFrom.value : null,
+      name_to: nameGrad.value ? nameTo.value : null,
+    }).eq('id', id);
+    grantBusy.value = false;
+    if (error) { void showToast('保存失败：' + error.message); return; }
+    void showToast('已修改');
+    cancelEdit();
+    if (grantId.value.trim()) await loadTargetTitles();
+    return;
+  }
+  const hid = Number(grantId.value.trim());
+  const text = grantText.value.trim();
+  if (!hid || !text) { void showToast('请填写 ID 和称号'); return; }
+  if (text.length > 10) { void showToast('称号最多 10 个字'); return; }
+  grantBusy.value = true;
+  const { error } = await db.rpc('grant_title', {
+    target_horizon_id: hid,
+    new_title: text,
+    title_grad: titleGrad.value,
+    title_from_hex: titleGrad.value ? titleFrom.value : null,
+    title_to_hex: titleGrad.value ? titleTo.value : null,
+    name_grad: nameGrad.value,
+    name_from_hex: nameGrad.value ? nameFrom.value : null,
+    name_to_hex: nameGrad.value ? nameTo.value : null,
+  });
+  grantBusy.value = false;
+  if (error) {
+    const msg = error.message.includes('user_not_found') ? '没有这个 HorizonID' : error.message;
+    void showToast('授予失败：' + msg);
+    return;
+  }
+  grantOpen.value = false;
+  grantId.value = '';
+  grantText.value = '';
+  void showToast('称号已授予，TA 在「我的 → 外观」里可以选择显示');
+}
+const plusPos = ref<Record<string, string>>({});
+
+function openPlus(ev: Event): void {
+  const el = ev.currentTarget as HTMLElement | null;
+  const r = el?.getBoundingClientRect();
+  if (r) plusPos.value = { top: `${r.bottom + 8}px`, right: `${Math.max(12, window.innerWidth - r.right)}px` };
+  plusOpen.value = true;
+}
+function menuCreateGroup(): void { plusOpen.value = false; groupOpen.value = true; }
+function menuAddFriend(): void { plusOpen.value = false; void router.push('/tabs/friends'); }
+
 const creating = ref(false);
 
 function openChat(id: string): void {
@@ -156,6 +414,18 @@ function chatAvatar(c: Chat): string | null {
   if (c.type === 'group') return c.avatarUrl;
   const other = c.members.find(m => m.user_id !== myId());
   return avatarOf(other?.user_id);
+}
+
+// 私聊对方 id（群聊没有）
+function peerId(c: Chat): string | null {
+  if (c.type === 'group') return null;
+  return c.members.find(m => m.user_id !== myId())?.user_id ?? null;
+}
+
+async function refreshTitles(): Promise<void> {
+  void loadOwner();
+  const ids = sortedChats.value.map(peerId).filter((x): x is string => !!x);
+  await ensureTitles(ids);
 }
 
 function preview(c: Chat): string {
@@ -171,6 +441,7 @@ function fmtListTime(iso: string): string {
 
 async function onRefresh(ev: CustomEvent): Promise<void> {
   await Promise.all([loadChats(), loadFriends()]);
+  await refreshTitles();
   (ev.target as unknown as { complete: () => void }).complete();
 }
 
@@ -273,6 +544,61 @@ async function onCreateGroup(p: { ids: string[]; name: string }): Promise<void> 
 </script>
 
 <style scoped>
+/* 用户名右侧的称号 */
+.ttl {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(127, 127, 127, 0.18);
+  vertical-align: middle;
+}
+
+/* 授予称号弹窗 */
+.grant-mask {
+  position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,.5);
+  display: grid; place-items: center; padding: 20px;
+}
+.grant-card {
+  width: min(92vw, 360px);
+  border-radius: 22px;
+  padding: 18px;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.grant-card h3 { margin: 0 0 4px; font-size: 17px; }
+.grant-card label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--md-on-surface-variant); }
+.grant-card input[type=text], .grant-card input:not([type]) {
+  padding: 10px 12px; border-radius: 12px; border: 1px solid var(--md-outline);
+  background: transparent; color: var(--md-on-surface); font-size: 15px;
+}
+.grant-card .row-check { flex-direction: row; align-items: center; gap: 8px; }
+.grant-card .colors { display: flex; gap: 10px; }
+.grant-card .colors input { width: 56px; height: 36px; border: 0; background: transparent; }
+.grant-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.grant-actions button { border: 0; border-radius: 12px; padding: 10px 16px; background: transparent; color: var(--md-on-surface-variant); font-size: 14px; }
+.grant-actions .primary { background: var(--md-primary); color: var(--md-on-primary); }
+/* 右上角 + 的浮动菜单 */
+.menu-backdrop { position: fixed; inset: 0; z-index: 9998; background: transparent; }
+.plus-pop {
+  position: fixed;
+  z-index: 9999;
+  min-width: 190px;
+  padding: 6px;
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+}
+.plus-pop button {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border: 0; border-radius: 12px;
+  background: transparent; color: var(--md-on-surface); font-size: 15px; text-align: left;
+}
+.plus-pop button:active { background: rgba(127,127,127,.16); }
+.plus-pop button ion-icon { font-size: 20px; color: var(--md-on-surface-variant); }
 /* 顶部与搜索：去掉灰块/阴影，做成一枚胶囊，页面整体连成一片 */
 ion-header { box-shadow: none; }
 ion-toolbar { --background: var(--md-surface); --border-width: 0; }
@@ -347,4 +673,20 @@ ion-searchbar.pill {
   border-radius: 12px; background: var(--md-primary); color: var(--md-on-primary);
   font-size: 13px; font-weight: 500; line-height: 24px; text-align: center;
 }
+.id-row { display: flex; gap: 8px; align-items: center; }
+.id-row input { flex: 1; }
+.mini {
+  border: 0; border-radius: 10px; padding: 8px 12px;
+  background: rgba(127,127,127,.16); color: var(--md-on-surface); font-size: 13px;
+}
+.mini.danger { color: #e5484d; }
+.titles-list { display: flex; flex-direction: column; gap: 6px; padding: 4px 0; }
+.tl-head { font-size: 12px; color: var(--md-on-surface-variant); }
+.tl-empty { margin: 0; font-size: 12px; color: var(--md-on-surface-variant); }
+.tl-row { display: flex; align-items: center; gap: 8px; }
+.tl-row .chip { flex: 1; padding: 3px 8px; border-radius: 8px; background: rgba(127,127,127,.16); font-weight: 600; font-size: 13px; }
+.preview { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 14px; background: rgba(127,127,127,.12); }
+.pv-label { font-size: 11px; color: var(--md-on-surface-variant); }
+.pv-row { display: flex; align-items: center; gap: 10px; }
+.pv-name { font-size: 15px; font-weight: 500; }
 </style>

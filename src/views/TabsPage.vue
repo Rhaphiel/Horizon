@@ -227,7 +227,7 @@ watch(() => route.path, () => refresh(true));
 
 <style scoped>
 ion-tab-bar.m3-nav {
-  --background: var(--md-surface-container);
+  --background: color-mix(in srgb, var(--md-surface) 58%, transparent);
   --border: 0;
   height: 62px;
   width: calc(100% - 40px);
@@ -239,7 +239,10 @@ ion-tab-bar.m3-nav {
   align-items: center;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.16);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   touch-action: none;
 }
 
@@ -288,6 +291,16 @@ ion-tab-button {
 .ind .on { display: none; color: #fff; }
 ion-tab-button.tab-selected .ind .on { display: block; }
 ion-tab-button.tab-selected .ind .off { display: none; }
+/* 悬停/聚焦时保持可见（浅色模式下 Ionic 会把颜色刷成白色，导致图标“消失”） */
+ion-tab-button:not(.tab-selected):hover,
+ion-tab-button:not(.tab-selected):focus,
+ion-tab-button:not(.tab-selected).ion-focused {
+  --color: var(--md-on-surface);
+  --color-selected: var(--md-on-surface);
+}
+ion-tab-button:not(.tab-selected):hover .ind .off,
+ion-tab-button:not(.tab-selected):hover .ind .on { color: var(--md-on-surface); }
+
 ion-tab-button.tab-selected .ind ion-label { color: #fff; font-weight: 600; }
 
 /* 小红点 / 数字角标 */

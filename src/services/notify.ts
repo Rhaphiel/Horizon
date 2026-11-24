@@ -131,7 +131,16 @@ export async function clearDelivered(): Promise<void> {
 
 // ============ 对外入口 ============
 // 新消息提醒：前台用应用内弹窗；后台用系统通知（已注册 FCM 时由 FCM 负责，避免重复）
+function isMutedConversation(cid: string): boolean {
+  try {
+    return localStorage.getItem('hz:mute:' + cid) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export function notifyNewMessage(m: MessageRow): void {
+  if (isMutedConversation(m.conversation_id)) return;
   if (!notifyOn.value || !session.user || m.sender_id === session.user.id) return;
   if (document.hidden) {
     if (!isRemotePushRegistered()) void systemNotify(m);

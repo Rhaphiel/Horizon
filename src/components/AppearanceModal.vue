@@ -22,6 +22,30 @@
         </div>
       </div>
 
+      <div class="section-title">称号与显示</div>
+      <div class="titles">
+        <label class="tit" :class="{ off: !myTitles.length }">
+          <input
+            type="radio"
+            name="shownTitle"
+            :disabled="!myTitles.length"
+            :checked="!shownTitleId"
+            @change="pickTitle(null)"
+          />
+          <span>不显示称号</span>
+        </label>
+        <label v-for="t in myTitles" :key="t.id" class="tit">
+          <input
+            type="radio"
+            name="shownTitle"
+            :checked="shownTitleId === t.id"
+            @change="pickTitle(t.id)"
+          />
+          <span class="chip" :style="titleStyle(t)">{{ t.text }}</span>
+        </label>
+        <p v-if="!myTitles.length" class="tit-empty">还没有被授予称号（由管理员发放）</p>
+      </div>
+
       <div class="section-title">深色 / 浅色</div>
       <ion-segment :value="appearance.mode" @ionChange="onMode">
         <ion-segment-button value="system"><ion-label>跟随系统</ion-label></ion-segment-button>
@@ -68,17 +92,43 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { IonModal, IonHeader, IonToolbar, IonButtons, IonButton, IonTitle, IonContent, IonSegment, IonSegmentButton, IonLabel, IonRange, IonIcon } from '@ionic/vue';
 import { closeOutline, colorPaletteOutline, imageOutline } from 'ionicons/icons';
 import { appearance, bubbleVars, chatBackground, BG_COLOR_PRESETS, SEED_PRESETS, removeChatImage, resetAppearance, setChatImage } from '@/theme/appearance';
 import type { BgKind, ThemeMode } from '@/theme/appearance';
 import { showToast } from '@/lib/toast';
+import { db } from '@/lib/supabase';
+import { session } from '@/stores/session';
+import { loadMyTitles, titleStyle } from '@/stores/titles';
+import type { OwnedTitle } from '@/stores/titles';
 
 defineProps<{ open: boolean }>();
 const emit = defineEmits<{ (e: 'close'): void }>();
 
 const fileInput = ref<HTMLInputElement | null>(null);
+
+const myTitles = ref<OwnedTitle[]>([]);
+const shownTitleId = ref<string | null>(null);
+
+async function loadTitles(): Promise<void> {
+  const uid = session.user?.id;
+  if (!uid) return;
+  myTitles.value = await loadMyTitles(uid);
+  const { data } = await db.from('profiles').select('shown_title').eq('id', uid).maybeSingle();
+  shownTitleId.value = (data?.shown_title as string | null) ?? null;
+}
+
+async function pickTitle(id: string | null): Promise<void> {
+  const uid = session.user?.id;
+  if (!uid) return;
+  shownTitleId.value = id;
+  const { error } = await db.from('profiles').update({ shown_title: id }).eq('id', uid);
+  if (error) { void showToast('保存失败：' + error.message); return; }
+  void showToast(id ? '已更新显示的称号' : '已隐藏称号');
+}
+
+onMounted(() => { void loadTitles(); });
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
 function onMode(ev: CustomEvent): void {
@@ -127,4 +177,9 @@ function onReset(): void {
 .sw.on { outline: 3px solid var(--md-primary); outline-offset: 2px; }
 .sw.custom ion-icon { font-size: 20px; mix-blend-mode: difference; }
 .sw.custom input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.titles { display: flex; flex-direction: column; gap: 8px; padding: 0 4px 6px; }
+.tit { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.tit.off { opacity: .55; }
+.tit .chip { padding: 2px 8px; border-radius: 8px; background: rgba(127,127,127,.16); font-weight: 600; }
+.tit-empty { margin: 2px 0 0; font-size: 12px; color: var(--md-on-surface-variant); }
 </style>

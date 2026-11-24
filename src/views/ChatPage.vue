@@ -1,27 +1,33 @@
 <template>
   <ion-page ref="page" :style="bubbleVars">
-    <ion-header>
-      <ion-toolbar v-if="mode === 'chat'">
-        <ion-buttons slot="start">
-          <ion-button class="icon-btn" aria-label="返回" @click="leaveChat"><ion-icon slot="icon-only" :icon="arrowBack" /></ion-button>
-        </ion-buttons>
-        <ion-title>
-          <div class="head">
-            <Avatar :name="title || '?'" :size="38" :src="headerAvatar" />
-            <span class="t">{{ title }}</span>
+    <ion-header class="chat-head">
+      <div v-if="mode === 'chat'" class="head-row">
+        <button class="glass circ" type="button" aria-label="返回" @click="leaveChat">
+          <ion-icon :icon="arrowBack" />
+        </button>
+
+        <div class="glass title-cap">
+          <Avatar :name="title || '?'" :size="34" :src="headerAvatar" />
+          <div class="tt">
+            <b>
+              <span :style="nameStyle(peerTitle)">{{ title }}</span>
+              <span v-if="peerTitle" class="ttl" :style="titleStyle(peerTitle)">{{ peerTitle.text }}</span>
+            </b>
+            <small v-if="isGroup">{{ chat ? chat.members.length : 0 }} 位成员</small>
+            <small v-else-if="muted">已静音</small>
           </div>
-        </ion-title>
-        <ion-buttons slot="end">
-          <ion-button class="icon-btn" aria-label="搜索" @click="openSearch"><ion-icon slot="icon-only" :icon="searchOutline" /></ion-button>
-          <ion-button class="icon-btn" aria-label="更多" @click="openMenu"><ion-icon slot="icon-only" :icon="ellipsisVertical" /></ion-button>
-        </ion-buttons>
-      </ion-toolbar>
-      <ion-toolbar v-else>
-        <ion-searchbar v-model="kw" placeholder="搜索本聊天的消息" :debounce="0" @keydown="onSearchKey" />
-        <ion-buttons slot="end">
-          <ion-button @click="closeSearch">取消</ion-button>
-        </ion-buttons>
-      </ion-toolbar>
+        </div>
+
+        <button class="glass circ" type="button" aria-label="更多" @click="openMore">
+          <ion-icon :icon="ellipsisVertical" />
+        </button>
+      </div>
+      <div v-else class="head-row search-row">
+        <button class="glass circ" type="button" aria-label="返回" @click="closeSearch">
+          <ion-icon :icon="arrowBack" />
+        </button>
+        <ion-searchbar v-model="kw" class="glass-search" placeholder="搜索本聊天的消息" :debounce="0" @keydown="onSearchKey" />
+      </div>
     </ion-header>
 
     <ion-content ref="content" :class="{ plain: mode === 'search' }">
@@ -46,7 +52,13 @@
               @pointerleave="cancelPress"
               @contextmenu.prevent="onContext(it.msg)"
             >
-              <div v-if="it.msg.sender_id !== me && isGroup" class="who">{{ nameOf(it.msg.sender_id) }}</div>
+              <div v-if="it.msg.sender_id !== me && isGroup" class="who">
+                <span :style="nameStyle(titleOf(it.msg.sender_id))">{{ nameOf(it.msg.sender_id) }}</span>
+                <span v-if="titleOf(it.msg.sender_id)" class="ttl" :style="titleStyle(titleOf(it.msg.sender_id)!)">{{ titleOf(it.msg.sender_id)!.text }}</span>
+              </div>
+              <div v-if="it.msg.reply_preview" class="quote">
+                <span>{{ it.msg.reply_preview }}</span>
+              </div>
               <MediaBubble
                 v-if="it.msg.media_type && it.msg.media_type !== 'text'"
                 :kind="it.msg.media_type === 'audio' ? 'audio' : 'image'"
@@ -83,52 +95,81 @@
       </ion-list>
     </ion-content>
 
-    <ion-footer v-if="mode === 'chat'">
+    <ion-footer v-if="mode === 'chat'" class="chat-foot">
       <div v-if="reedit" class="reedit">
         <span class="rtext">你撤回了一条消息</span>
         <button type="button" class="rdo" @click="doReedit">重新编辑</button>
         <button type="button" class="rx" aria-label="关闭" @click="dismissReedit">✕</button>
       </div>
       <div v-if="note" class="note">{{ note }}</div>
-      <ion-toolbar>
-        <div class="composer">
-          <!-- 图片 -->
-          <button class="cbtn" type="button" aria-label="发送图片" :disabled="busyMedia" @click="pickImage">
-            <ion-icon :icon="imageOutline" />
-          </button>
-          <input ref="imgEl" type="file" accept="image/*" hidden @change="onImagePick" />
 
-          <!-- 原生 textarea：按屏幕宽度自动换行，内容多时向上长高（最高约 5 行，再多就在框内滚动） -->
-          <textarea
-            ref="ta"
-            v-model="text"
-            class="ta"
-            rows="1"
-            maxlength="1000"
-            placeholder="输入消息"
-            autocomplete="off"
-            autocapitalize="sentences"
-            @keydown="onKey"
-          />
+      <!-- 引用回复的预览条 -->
+      <div v-if="replyTo" class="quote-bar glass">
+        <span class="q-line" />
+        <div class="q-text">
+          <b>{{ replyTo.who }}</b>
+          <span>{{ replyTo.preview }}</span>
+        </div>
+        <button type="button" class="q-x" aria-label="取消引用" @click="clearReply">✕</button>
+      </div>
 
-          <!-- 语音：点一下开始记录，再点一下发送 -->
-          <button
-            class="cbtn"
-            :class="{ rec: recording }"
-            type="button"
-            :aria-label="recording ? '停止并发送语音' : '录语音'"
-            :disabled="busyMedia"
-            @click="toggleRecord"
-          >
-            <ion-icon :icon="recording ? stopCircle : micOutline" />
-          </button>
+      <div class="composer glass">
+        <!-- 图片 -->
+        <button class="cbtn" type="button" aria-label="发送图片" :disabled="busyMedia" @click="pickImage">
+          <ion-icon :icon="imageOutline" />
+        </button>
+        <input ref="imgEl" type="file" accept="image/*" hidden @change="onImagePick" />
+
+        <!-- 原生 textarea：按屏幕宽度自动换行，内容多时向上长高（最高约 5 行，再多就在框内滚动） -->
+        <textarea
+          ref="ta"
+          v-model="text"
+          class="ta"
+          rows="1"
+          maxlength="1000"
+          placeholder="输入消息"
+          autocomplete="off"
+          autocapitalize="sentences"
+          @keydown="onKey"
+        />
+
+        <!-- 语音：点一下开始记录，再点一下发送 -->
+        <button
+          class="cbtn"
+          :class="{ rec: recording }"
+          type="button"
+          :aria-label="recording ? '停止并发送语音' : '录语音'"
+          :disabled="busyMedia"
+          @click="toggleRecord"
+        >
+          <ion-icon :icon="recording ? stopCircle : micOutline" />
+        </button>
 
           <ion-button class="send" :disabled="sending || !(text ?? '').trim()" aria-label="发送" @click="send">
             <ion-icon slot="icon-only" :icon="sendIcon" />
           </ion-button>
-        </div>
-      </ion-toolbar>
+      </div>
     </ion-footer>
+
+    <!-- 更多菜单：贴在 ⋮ 下方 -->
+    <Teleport to="body">
+    <div v-if="moreOpen" class="menu-backdrop" @click="closeMore" />
+    <div v-if="moreOpen" class="more-pop glass" :style="morePos">
+      <button type="button" @click="menuSearch">
+        <ion-icon :icon="searchOutline" /><span>搜索聊天记录</span>
+      </button>
+      <button type="button" @click="menuMute">
+        <ion-icon :icon="muted ? notificationsOffOutline : notificationsOutline" />
+        <span>{{ muted ? '关闭静音' : '静音' }}</span>
+      </button>
+      <button v-if="isGroup" type="button" @click="menuInfo">
+        <ion-icon :icon="informationCircleOutline" /><span>群聊信息</span>
+      </button>
+      <button type="button" class="danger" @click="menuClear">
+        <ion-icon :icon="trashOutline" /><span>清空聊天记录</span>
+      </button>
+    </div>
+    </Teleport>
 
     <ImageViewer :open="viewerOpen" :paths="imagePaths" :index="viewerIndex" @close="viewerOpen = false" @change="viewerIndex = $event" />
 
@@ -145,7 +186,7 @@ import {
   IonSearchbar, IonList, IonItem, IonLabel, IonIcon,
   actionSheetController, onIonViewDidEnter, onIonViewWillLeave, useIonRouter,
 } from '@ionic/vue';
-import { arrowBack, arrowRedoOutline, closeOutline, copyOutline, ellipsisVertical, imageOutline, micOutline, searchOutline, send as sendIcon, stopCircle, textOutline, arrowUndoOutline } from 'ionicons/icons';
+import { arrowBack, arrowRedoOutline, closeOutline, copyOutline, ellipsisVertical, imageOutline, micOutline, searchOutline, send as sendIcon, stopCircle, textOutline, arrowUndoOutline, returnUpBackOutline, notificationsOutline, notificationsOffOutline, informationCircleOutline, trashOutline } from 'ionicons/icons';
 import Avatar from '@/components/Avatar.vue';
 import SelectTextModal from '@/components/SelectTextModal.vue';
 import ForwardModal from '@/components/ForwardModal.vue';
@@ -158,7 +199,8 @@ import type { MessageRow } from '@/types/database';
 import { chats, chatTitle, getChat, loadChats, markRead, touchChat } from '@/stores/chats';
 import { nameOf, avatarOf } from '@/stores/directory';
 import { myId } from '@/stores/session';
-import { fmtDateTime, fmtDay, fmtTime, highlightParts, makeSnippet } from '@/lib/format';
+import { ensureTitles, titleOf, titleStyle, nameStyle } from '@/stores/titles';
+import { fmtDateTime, fmtDay, fmtTime, highlightParts, makeSnippet, oneLine } from '@/lib/format';
 import { confirmDialog, showToast } from '@/lib/toast';
 import { on } from '@/lib/bus';
 import { registerBackHandler } from '@/services/backButton';
@@ -203,6 +245,14 @@ const me = computed(() => myId());
 const chat = computed(() => getChat(cid.value));
 const isGroup = computed(() => chat.value?.type === 'group');
 // 顶部头像：群聊用群头像，私聊用对方头像
+// 私聊时对方 id / 对方称号
+const peerId = computed<string | null>(() => {
+  const c = chat.value;
+  if (!c || c.type === 'group') return null;
+  return c.members.find(m => m.user_id !== myId())?.user_id ?? null;
+});
+const peerTitle = computed(() => titleOf(peerId.value));
+
 const headerAvatar = computed<string | null>(() => {
   const c = getChat(cid.value);
   if (!c) return null;
@@ -296,6 +346,7 @@ async function init(): Promise<void> {
   }
   const msg = typeof route.query.msg === 'string' ? route.query.msg : '';
   const at = typeof route.query.at === 'string' ? route.query.at : '';
+  syncMute();
   if (msg && at) await openAround({ id: msg, created_at: at });
   else await openLatest();
 }
@@ -389,12 +440,13 @@ async function send(): Promise<void> {
   note.value = '';
   try {
     if (hasNewer.value) await openLatest();   // 正在看历史消息时发送，先回到最新
-    const { data, error } = await sendMessage(cid.value, uid, body);
+    const { data, error } = await sendMessage(cid.value, uid, body, replyTo.value?.id, replyTo.value?.preview);
     if (error) {
       note.value = '发送失败：' + error.message;
       return;
     }
     text.value = '';
+    clearReply();
     void nextTick(fitTextarea);
     mergeRows([data]);
     touchChat(data);
@@ -402,6 +454,21 @@ async function send(): Promise<void> {
   } finally {
     sending.value = false;
   }
+}
+
+// ---------- 引用回复 ----------
+const replyTo = ref<{ id: string; who: string; preview: string } | null>(null);
+
+function startReply(m: MessageRow): void {
+  replyTo.value = {
+    id: m.id,
+    who: m.sender_id === myId() ? '你' : nameOf(m.sender_id),
+    preview: (m.media_type && m.media_type !== 'text') ? (m.media_type === 'image' ? '[图片]' : '[语音]') : oneLine(m.body).slice(0, 60),
+  };
+  void nextTick(() => ta.value?.focus());
+}
+function clearReply(): void {
+  replyTo.value = null;
 }
 
 // ---------- 图片查看器（左右滑动看前后图片）----------
@@ -565,6 +632,7 @@ async function openMsgMenu(m: MessageRow): Promise<void> {
     && !m.recalled_at
     && Date.now() - Date.parse(m.created_at) < 60 * 60 * 1000;
 
+  menuOpen.value = true;
   const sheet = await actionSheetController.create({
     buttons: [
       {
@@ -577,6 +645,7 @@ async function openMsgMenu(m: MessageRow): Promise<void> {
       },
       { text: '选择文本', icon: textOutline, data: 'select' },
       { text: '转发', icon: arrowRedoOutline, data: 'forward' },
+      { text: '引用回复', icon: returnUpBackOutline, data: 'reply' },
       ...(canRecall ? [{ text: '撤回', icon: arrowUndoOutline, data: 'recall' }] : []),
       { text: '取消', icon: closeOutline, role: 'cancel' },
     ],
@@ -587,9 +656,22 @@ async function openMsgMenu(m: MessageRow): Promise<void> {
   if (data === 'select') selectOpen.value = true;
   if (data === 'forward') forwardOpen.value = true;
   if (data === 'recall') await recall(m);
+  if (data === 'reply') startReply(m);
 }
 
 // ---------- 撤回 + 10 分钟内可重新编辑 ----------
+const menuOpen = ref(false);
+const muted = ref(false);
+
+function syncMute(): void {
+  muted.value = localStorage.getItem('hz:mute:' + cid.value) === '1';
+}
+
+function toggleMute(): void {
+  muted.value = !muted.value;
+  localStorage.setItem('hz:mute:' + cid.value, muted.value ? '1' : '0');
+  void showToast(muted.value ? '已静音这个聊天' : '已恢复通知');
+}
 const reedit = ref<{ text: string; at: number } | null>(null);
 let reeditTimer = 0;
 
@@ -693,28 +775,35 @@ function pickHit(h: MessageRow): void {
   void openAround(target);
 }
 
-// ---------- 更多菜单 ----------
-async function openMenu(): Promise<void> {
-  const buttons: Array<{ text: string; role?: string; handler?: () => void }> = [];
-  if (isGroup.value) {
-    buttons.push({
-      text: '群聊信息',
-      handler: () => {
-        void router.push({ path: `/chat/${cid.value}/info`, query: route.query });   // 带上 from，返回时才知道该回哪个标签
-      },
-    });
+// ---------- 更多菜单：浮在 ⋮ 旁边的玻璃卡片 ----------
+const moreOpen = ref(false);
+const morePos = ref<Record<string, string>>({});
+
+function openMore(ev: Event): void {
+  const el = ev.currentTarget as HTMLElement | null;
+  const r = el?.getBoundingClientRect();
+  if (r) {
+    morePos.value = {
+      top: `${r.bottom + 8}px`,
+      right: `${Math.max(12, window.innerWidth - r.right)}px`,
+    };
   }
-  buttons.push({
-    text: '清空聊天记录',
-    role: 'destructive',
-    handler: () => {
-      void clearChat();
-    },
-  });
-  buttons.push({ text: '取消', role: 'cancel' });
-  const sheet = await actionSheetController.create({ header: title.value, buttons });
-  await sheet.present();
+  moreOpen.value = true;
+  menuOpen.value = true;   // 同时收起输入栏
 }
+
+function closeMore(): void {
+  moreOpen.value = false;
+  menuOpen.value = false;
+}
+
+function menuSearch(): void { closeMore(); openSearch(); }
+function menuMute(): void { toggleMute(); closeMore(); }
+function menuInfo(): void {
+  closeMore();
+  void router.push({ path: `/chat/${cid.value}/info`, query: route.query });
+}
+function menuClear(): void { closeMore(); void clearChat(); }
 
 async function clearChat(): Promise<void> {
   const ok = await confirmDialog('清空聊天记录', '只会清空你这边的记录，对方和群里其他人不受影响。确定清空吗？', '清空');
@@ -729,6 +818,15 @@ async function clearChat(): Promise<void> {
 }
 
 // ---------- 实时 / 前后台 ----------
+// 给消息里出现的人补称号
+function refreshSenderTitles(): void {
+  const ids = [...new Set(rows.value.map(r => r.sender_id))];
+  void ensureTitles(ids);
+  if (peerId.value) void ensureTitles([peerId.value]);
+}
+
+watch(() => rows.value.length, () => refreshSenderTitles());
+
 async function onIncoming(m: MessageRow): Promise<void> {
   if (m.conversation_id !== cid.value || hasNewer.value) return;
   const near = await nearBottom();
@@ -748,6 +846,11 @@ let offResume: (() => void) | null = null;
 
 onMounted(() => {
   // 返回键：搜索面板打开时，先收起它
+  registerBackHandler(() => {
+    if (viewerOpen.value) { viewerOpen.value = false; return true; }
+    return false;
+  });
+
   offBack = registerBackHandler(() => {
     if (mode.value === 'search') {
       closeSearch();
@@ -798,6 +901,122 @@ watch(
 </script>
 
 <style scoped>
+/* 称号小胶囊（气泡里的名字旁 / 顶栏） */
+.ttl {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.18);
+  vertical-align: middle;
+}
+/* ===== ⋮ 浮动菜单 ===== */
+.menu-backdrop { position: fixed; inset: 0; z-index: 9998; background: transparent; }
+.more-pop {
+  position: fixed;
+  z-index: 9999;
+  min-width: 196px;
+  padding: 6px;
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+}
+.more-pop button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-size: 15px;
+  text-align: left;
+}
+.more-pop button:active { background: rgba(127, 127, 127, 0.16); }
+.more-pop button ion-icon { font-size: 20px; color: var(--md-on-surface-variant); }
+.more-pop button.danger, .more-pop button.danger ion-icon { color: #e5484d; }
+/* ===== 悬浮玻璃顶栏 ===== */
+.chat-head { background: transparent; box-shadow: none; }
+.chat-head::after { display: none; }
+.head-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(8px + var(--ion-safe-area-top, 0px)) 12px 8px;
+}
+.circ {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.18);
+  color: var(--md-on-surface);
+  display: grid;
+  place-items: center;
+  font-size: 21px;
+  padding: 0;
+}
+.title-cap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 8px 0 8px;
+  border-radius: 999px;
+}
+.title-cap .tt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.title-cap b { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title-cap small { font-size: 11px; color: var(--md-on-surface-variant); }
+.cap-btn {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font-size: 19px;
+  display: grid;
+  place-items: center;
+}
+.search-row { padding: calc(6px + var(--ion-safe-area-top, 0px)) 12px 6px; }
+.glass-search { flex: 1; --background: transparent; --box-shadow: none; padding: 0; }
+
+/* ===== 悬浮玻璃输入栏 ===== */
+.chat-foot { background: transparent; box-shadow: none; padding: 0 10px calc(8px + var(--ion-safe-area-bottom, 0px)); }
+.chat-foot::before { display: none; }
+.composer {
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+/* 引用预览条 */
+.quote-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  padding: 8px 12px;
+  border-radius: 16px;
+}
+.q-line { width: 3px; align-self: stretch; border-radius: 3px; background: var(--md-primary); }
+.q-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.q-text b { font-size: 12px; color: var(--md-primary); font-weight: 600; }
+.q-text span { font-size: 12px; color: var(--md-on-surface-variant); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.q-x { border: 0; background: transparent; color: var(--md-on-surface-variant); font-size: 14px; padding: 2px 4px; }
+
+/* 气泡内的引用块 */
+.quote {
+  margin: 0 0 6px;
+  padding: 6px 10px;
+  border-left: 3px solid currentColor;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 12px;
+  opacity: 0.9;
+}
 /* 聊天背景：颜色 / 图片 / 透明度由「外观」设置决定（见 theme/appearance.ts） */
 ion-content { --background: var(--chat-bg); }
 ion-content.plain { --background: var(--md-surface); }
@@ -849,7 +1068,7 @@ ion-content.plain { --background: var(--md-surface); }
 
 /* 气泡：颜色由变量决定，文字颜色与气泡颜色成对选取，保证看得清 */
 .bubble {
-  background: var(--in-bg);
+  background: linear-gradient(135deg, var(--in-bg), var(--in-bg2));
   color: var(--in-fg);
   padding: 8px 12px 6px;
   min-width: 64px;
@@ -861,7 +1080,7 @@ ion-content.plain { --background: var(--md-surface); }
   -webkit-touch-callout: none;
   touch-action: pan-y;
 }
-.msg.mine .bubble { background: var(--out-bg); color: var(--out-fg); border-radius: 18px 18px 4px 18px; }
+.msg.mine .bubble { background: linear-gradient(135deg, var(--out-bg), var(--out-bg2)); color: var(--out-fg); border-radius: 18px 18px 4px 18px; }
 .msg.flash .bubble { outline: 2px solid var(--md-primary); outline-offset: 2px; }
 .who { font-size: 12px; font-weight: 500; opacity: 0.85; margin-bottom: 2px; }
 .body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.4; }

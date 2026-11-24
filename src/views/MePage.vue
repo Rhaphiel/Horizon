@@ -33,12 +33,21 @@
         </ion-item>
         <ion-item>
           <ion-label>
+            <p>ID</p>
+            <h2>{{ profileLoaded ? (horizonId ?? '—') : '…' }}</h2>
+          </ion-label>
+        </ion-item>
+        <ion-item>
+          <ion-label>
             <p>邮箱</p>
             <h2>{{ session.user?.email || '—' }}</h2>
           </ion-label>
         </ion-item>
         <ion-item>
           <ion-toggle :checked="notifyOn" @ionChange="onToggle">新消息通知</ion-toggle>
+        </ion-item>
+        <ion-item>
+          <ion-toggle :checked="updatePushOn" @ionChange="onToggleUpdatePush">更新推送</ion-toggle>
         </ion-item>
         <ion-item lines="none">
           <ion-label>
@@ -57,13 +66,14 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { IonPage, IonHeader, IonToolbar, IonTitle, IonContent, IonList, IonItem, IonLabel, IonToggle, IonButton, IonIcon } from '@ionic/vue';
 import { colorPaletteOutline } from 'ionicons/icons';
 import Avatar from '@/components/Avatar.vue';
 import AvatarCropper from '@/components/AvatarCropper.vue';
 import AppearanceModal from '@/components/AppearanceModal.vue';
 import { session } from '@/stores/session';
+import { db } from '@/lib/supabase';
 import { myAvatar, loadMyAvatar, setMyAvatar } from '@/stores/profile';
 import { uploadUserAvatar, isStaticImage } from '@/services/avatarApi';
 import { setAvatar } from '@/stores/directory';
@@ -77,8 +87,76 @@ const fileEl = ref<HTMLInputElement | null>(null);
 const uploading = ref(false);
 const cropOpen = ref(false);
 const cropSrc = ref('');
+const horizonId = ref<number | null>(null);
+const idSearchable = ref(true);
+const profileLoaded = ref(false);
+const isOwnerId = computed(() => horizonId.value === 100001);
+const updatePushOn = ref(localStorage.getItem('hz:update-push') !== '0');
 
-onMounted(() => { void loadMyAvatar(); });
+function onToggleUpdatePush(ev: CustomEvent): void {
+  updatePushOn.value = !!(ev.detail as { checked: boolean }).checked;
+  localStorage.setItem('hz:update-push', updatePushOn.value ? '1' : '0');
+  void showToast(updatePushOn.value ? '已开启更新推送' : '已关闭更新推送');
+}
+
+async function onToggleIdSearch(ev: CustomEvent): Promise<void> {
+  const uid = session.user?.id;
+  if (!uid) return;
+  idSearchable.value = !!(ev.detail as { checked: boolean }).checked;
+  const { error } = await db.from('profiles').update({ id_searchable: idSearchable.value }).eq('id', uid);
+  if (error) { void showToast('保存失败：' + error.message); return; }
+  try {
+    localStorage.setItem(ME_KEY, JSON.stringify({ id: uid, horizonId: horizonId.value, idSearchable: idSearchable.value }));
+  } catch { /* 忽略 */ }
+  void showToast(idSearchable.value ? '别人可以通过 ID 找到你' : '已关闭 ID 查找');
+}
+
+// 缓存上次拿到的 ID，切换标签时立刻显示，避免闪一下「—」
+interface CachedMe { id: string; horizonId: number | null; idSearchable: boolean }
+const ME_KEY = 'hz:me:profile';
+
+function readCache(uid: string): CachedMe | null {
+  try {
+    const raw = localStorage.getItem(ME_KEY);
+    if (!raw) return null;
+    const c = JSON.parse(raw) as CachedMe;
+    return c.id === uid ? c : null;
+  } catch {
+    return null;
+  }
+}
+
+async function loadHorizonId(): Promise<void> {
+  const uid = session.user?.id;
+  if (!uid) return;
+  const { data } = await db.from('profiles').select('horizon_id,id_searchable').eq('id', uid).maybeSingle();
+  horizonId.value = (data?.horizon_id as number | undefined) ?? null;
+  idSearchable.value = (data?.id_searchable as boolean | undefined) ?? true;
+  profileLoaded.value = true;
+  try {
+    localStorage.setItem(ME_KEY, JSON.stringify({
+      id: uid,
+      horizonId: horizonId.value,
+      idSearchable: idSearchable.value,
+    }));
+  } catch {
+    /* 忽略配额错误 */
+  }
+}
+
+onMounted(() => {
+  void loadMyAvatar();
+  const uid = session.user?.id;
+  if (uid) {
+    const c = readCache(uid);
+    if (c) {
+      horizonId.value = c.horizonId;
+      idSearchable.value = c.idSearchable;
+      profileLoaded.value = true;
+    }
+  }
+  void loadHorizonId();
+});
 
 function pick(): void {
   fileEl.value?.click();
