@@ -38,6 +38,21 @@ jobs:
       - name: Build web app
         run: npm run build
 
+      # 固定签名：用仓库 Secret 里的 keystore 覆盖 runner 自动生成的 debug 签名。
+      # 不加这一步，每台 runner 会生成不同的 debug key → 每次装新版都提示「未安装应用」
+      - name: Use stable debug keystore
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
+            printf '%s' "$DEBUG_KEYSTORE_BASE64" | base64 --decode > "$HOME/.android/debug.keystore"
+            echo "已使用 Secret 中的固定签名密钥"
+          else
+            echo "::warning::没有配置 DEBUG_KEYSTORE_BASE64，本次 APK 签名会与上一版不同，可能无法覆盖安装"
+          fi
+          ls -l "$HOME/.android/debug.keystore" || true
+
       - name: Create Android project
         run: npx cap add android
 
@@ -59,16 +74,34 @@ jobs:
             echo "::warning::Firebase config missing. APK can build, but FCM registration will not work until configured."
           fi
 
-      # Android 13+ 必须声明 POST_NOTIFICATIONS，否则系统通知静默失败
-      - name: Ensure POST_NOTIFICATIONS permission
+      # 媒体/通知权限：用 Python 插到 <application> 前面，比正则替换稳（不依赖 INTERNET 那行的写法）
+      # 缺 RECORD_AUDIO → WebView 的 getUserMedia 直接 Permission denied，而且不会弹系统授权框
+      - name: Ensure media & notification permissions
         run: |
-          MAN=android/app/src/main/AndroidManifest.xml
-          if ! grep -q 'POST_NOTIFICATIONS' "$MAN"; then
-            perl -0pi -e 's#(<uses-permission android:name="android.permission.INTERNET" />)#$1\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />#' "$MAN"
-          fi
-          grep -n 'uses-permission' "$MAN"
+          python3 - <<'PY'
+          import re
+          path = 'android/app/src/main/AndroidManifest.xml'
+          src = open(path, encoding='utf-8').read()
+          need = [
+              'android.permission.RECORD_AUDIO',
+              'android.permission.POST_NOTIFICATIONS',
+              'android.permission.MODIFY_AUDIO_SETTINGS',
+          ]
+          for perm in need:
+              if perm in src:
+                  continue
+              src = src.replace(
+                  '<application',
+                  f'    <uses-permission android:name="{perm}" />\n    <application',
+                  1,
+              )
+          open(path, 'w', encoding='utf-8').write(src)
+          print('manifest updated')
+          PY
+          grep -n 'uses-permission' android/app/src/main/AndroidManifest.xml
+          grep -q 'RECORD_AUDIO' android/app/src/main/AndroidManifest.xml || (echo '::error::RECORD_AUDIO 注入失败' && exit 1)
 
-      # 版本号以 package.json 为唯一来源：0.3.0 -> versionName "0.3.0"，versionCode 300
+      # 版本号以 package.json 为唯一来源：0.4.0 -> versionName "0.4.0"，versionCode 400
       - name: Set app version from package.json
         run: |
           VER=$(node -p "require('./package.json').version")
