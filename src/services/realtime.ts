@@ -20,6 +20,10 @@ export function startRealtime(): void {
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, p => {
       void onNewMessage(p.new as MessageRow);
     })
+    // 消息被撤回 / 过期标记（UPDATE）
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, p => {
+      emit('message-updated', p.new as MessageRow);
+    })
     // 有人加入群（含我被拉进新群）
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversation_members' }, () => {
       void loadChats();

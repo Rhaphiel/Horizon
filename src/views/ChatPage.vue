@@ -33,6 +33,9 @@
 
         <template v-for="it in items" :key="it.key">
           <div v-if="it.day" class="day">{{ it.day }}</div>
+          <div v-else-if="it.msg && it.msg.recalled_at" class="recalled">
+            {{ recallText(it.msg) }}
+          </div>
           <div v-else-if="it.msg" :class="['msg', { mine: it.msg.sender_id === me, flash: it.msg.id === flashId }]" :data-id="it.msg.id">
             <div
               class="bubble"
@@ -44,7 +47,16 @@
               @contextmenu.prevent="onContext(it.msg)"
             >
               <div v-if="it.msg.sender_id !== me && isGroup" class="who">{{ nameOf(it.msg.sender_id) }}</div>
-              <div class="body">{{ it.msg.body }}</div>
+              <MediaBubble
+                v-if="it.msg.media_type && it.msg.media_type !== 'text'"
+                :kind="it.msg.media_type === 'audio' ? 'audio' : 'image'"
+                :path="it.msg.media_path"
+                :duration="it.msg.media_duration"
+                :expired="it.msg.is_expired"
+                :expires-at="it.msg.expires_at"
+                @open="openViewer(it.msg)"
+              />
+              <div v-else class="body">{{ it.msg.body }}</div>
               <div class="meta">{{ fmtTime(it.msg.created_at) }}</div>
             </div>
           </div>
@@ -72,9 +84,20 @@
     </ion-content>
 
     <ion-footer v-if="mode === 'chat'">
+      <div v-if="reedit" class="reedit">
+        <span class="rtext">你撤回了一条消息</span>
+        <button type="button" class="rdo" @click="doReedit">重新编辑</button>
+        <button type="button" class="rx" aria-label="关闭" @click="dismissReedit">✕</button>
+      </div>
       <div v-if="note" class="note">{{ note }}</div>
       <ion-toolbar>
         <div class="composer">
+          <!-- 图片 -->
+          <button class="cbtn" type="button" aria-label="发送图片" :disabled="busyMedia" @click="pickImage">
+            <ion-icon :icon="imageOutline" />
+          </button>
+          <input ref="imgEl" type="file" accept="image/*" hidden @change="onImagePick" />
+
           <!-- 原生 textarea：按屏幕宽度自动换行，内容多时向上长高（最高约 5 行，再多就在框内滚动） -->
           <textarea
             ref="ta"
@@ -87,12 +110,27 @@
             autocapitalize="sentences"
             @keydown="onKey"
           />
+
+          <!-- 语音：点一下开始记录，再点一下发送 -->
+          <button
+            class="cbtn"
+            :class="{ rec: recording }"
+            type="button"
+            :aria-label="recording ? '停止并发送语音' : '录语音'"
+            :disabled="busyMedia"
+            @click="toggleRecord"
+          >
+            <ion-icon :icon="recording ? stopCircle : micOutline" />
+          </button>
+
           <ion-button class="send" :disabled="sending || !(text ?? '').trim()" aria-label="发送" @click="send">
             <ion-icon slot="icon-only" :icon="sendIcon" />
           </ion-button>
         </div>
       </ion-toolbar>
     </ion-footer>
+
+    <ImageViewer :open="viewerOpen" :paths="imagePaths" :index="viewerIndex" @close="viewerOpen = false" @change="viewerIndex = $event" />
 
     <SelectTextModal :open="selectOpen" :text="pickedBody" @close="selectOpen = false" />
     <ForwardModal :open="forwardOpen" :body="pickedBody" :busy="forwarding" @close="forwardOpen = false" @submit="forwardTo" />
@@ -107,10 +145,12 @@ import {
   IonSearchbar, IonList, IonItem, IonLabel, IonIcon,
   actionSheetController, onIonViewDidEnter, onIonViewWillLeave, useIonRouter,
 } from '@ionic/vue';
-import { arrowBack, arrowRedoOutline, closeOutline, copyOutline, ellipsisVertical, searchOutline, send as sendIcon, textOutline } from 'ionicons/icons';
+import { arrowBack, arrowRedoOutline, closeOutline, copyOutline, ellipsisVertical, imageOutline, micOutline, searchOutline, send as sendIcon, stopCircle, textOutline, arrowUndoOutline } from 'ionicons/icons';
 import Avatar from '@/components/Avatar.vue';
 import SelectTextModal from '@/components/SelectTextModal.vue';
 import ForwardModal from '@/components/ForwardModal.vue';
+import MediaBubble from '@/components/MediaBubble.vue';
+import ImageViewer from '@/components/ImageViewer.vue';
 import { bubbleVars } from '@/theme/appearance';
 import { copyText } from '@/lib/clipboard';
 import { leaveChat } from '@/services/navigation';
@@ -124,9 +164,11 @@ import { on } from '@/lib/bus';
 import { registerBackHandler } from '@/services/backButton';
 import { clearDelivered } from '@/services/notify';
 import { clearConversation } from '@/services/chatApi';
+import { uploadChatMedia, sendMediaMessage } from '@/services/mediaApi';
+import { compressImage } from '@/services/avatarApi';
 import {
   AROUND_AFTER, AROUND_BEFORE, PAGE,
-  fetchAfter, fetchBefore, fetchLatest, fetchNewer, fetchOlder, searchMessages, sendMessage,
+  fetchAfter, fetchBefore, fetchLatest, fetchNewer, fetchOlder, recallMessage, searchMessages, sendMessage,
 } from '@/services/messagesApi';
 
 type ContentEl = { getScrollElement: () => Promise<HTMLElement>; scrollToBottom: (duration?: number) => Promise<void> };
@@ -207,6 +249,12 @@ function resetRows(): void {
   ids = new Set<string>();
   hasOlder.value = false;
   hasNewer.value = false;
+}
+
+// 撤回后显示的系统提示
+function recallText(m: MessageRow): string {
+  if (m.sender_id === myId()) return '你撤回了一条消息';
+  return isGroup.value ? `${nameOf(m.sender_id)} 撤回了一条消息` : '对方撤回了一条消息';
 }
 
 async function scrollEl(): Promise<HTMLElement | null> {
@@ -356,6 +404,117 @@ async function send(): Promise<void> {
   }
 }
 
+// ---------- 图片查看器（左右滑动看前后图片）----------
+const viewerOpen = ref(false);
+const viewerIndex = ref(0);
+const imageMsgs = computed(() => rows.value.filter(m => m.media_type === 'image' && !m.is_expired && m.media_path));
+const imagePaths = computed(() => imageMsgs.value.map(m => m.media_path as string));
+
+function openViewer(m: MessageRow): void {
+  const i = imageMsgs.value.findIndex(x => x.id === m.id);
+  viewerIndex.value = i < 0 ? 0 : i;
+  viewerOpen.value = true;
+}
+
+// ---------- 多媒体：图片 / 语音 ----------
+const imgEl = ref<HTMLInputElement | null>(null);
+const busyMedia = ref(false);
+const recording = ref(false);
+let recorder: MediaRecorder | null = null;
+let chunks: Blob[] = [];
+let recStart = 0;
+
+function pickImage(): void {
+  imgEl.value?.click();
+}
+
+async function onImagePick(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    void showToast('只能选图片');
+    return;
+  }
+  if (busyMedia.value) return;
+  busyMedia.value = true;
+  note.value = '正在发送图片…';
+  try {
+    const blob = await compressImage(file, 1600);          // 压到长边 1600，减小流量
+    const up = await uploadChatMedia(cid.value, blob, 'image');
+    if (up.error || !up.data) {
+      note.value = '图片上传失败：' + (up.error || '未知错误');
+      return;
+    }
+    const { data, error } = await sendMediaMessage(cid.value, up.data, 'image');
+    if (error) {
+      note.value = '发送失败：' + error.message;
+      return;
+    }
+    note.value = '';
+    if (hasNewer.value) await openLatest();
+    mergeRows([data as MessageRow]);
+    touchChat(data as MessageRow);
+    await scrollBottom();
+  } finally {
+    busyMedia.value = false;
+  }
+}
+
+async function toggleRecord(): Promise<void> {
+  if (recording.value) {
+    recorder?.stop();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    chunks = [];
+    recStart = Date.now();
+    const mr = new MediaRecorder(stream);
+    recorder = mr;
+    mr.ondataavailable = ev => { if (ev.data.size) chunks.push(ev.data); };
+    mr.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      recording.value = false;
+      recorder = null;
+      const dur = Math.max(1, Math.round((Date.now() - recStart) / 1000));
+      const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
+      void sendVoice(blob, dur);
+    };
+    mr.start();
+    recording.value = true;
+    note.value = '录音中… 再点一下麦克风发送';
+  } catch (err) {
+    note.value = '无法录音：' + (err instanceof Error ? err.message : '请检查麦克风权限');
+  }
+}
+
+async function sendVoice(blob: Blob, dur: number): Promise<void> {
+  if (!blob.size) return;
+  busyMedia.value = true;
+  note.value = '正在发送语音…';
+  try {
+    const up = await uploadChatMedia(cid.value, blob, 'audio');
+    if (up.error || !up.data) {
+      note.value = '语音上传失败：' + (up.error || '未知错误');
+      return;
+    }
+    const { data, error } = await sendMediaMessage(cid.value, up.data, 'audio', dur);
+    if (error) {
+      note.value = '发送失败：' + error.message;
+      return;
+    }
+    note.value = '';
+    if (hasNewer.value) await openLatest();
+    mergeRows([data as MessageRow]);
+    touchChat(data as MessageRow);
+    await scrollBottom();
+  } finally {
+    busyMedia.value = false;
+  }
+}
+
 // ---------- 长按消息：复制 / 选择文本 / 转发 ----------
 const selectOpen = ref(false);
 const forwardOpen = ref(false);
@@ -392,6 +551,12 @@ function onContext(m: MessageRow): void {
 async function openMsgMenu(m: MessageRow): Promise<void> {
   lastMenuAt = Date.now();
   navigator.vibrate?.(12);
+
+  // 自己发的、1 小时内、未被撤回 → 可以撤回
+  const canRecall = m.sender_id === myId()
+    && !m.recalled_at
+    && Date.now() - Date.parse(m.created_at) < 60 * 60 * 1000;
+
   const sheet = await actionSheetController.create({
     buttons: [
       {
@@ -404,6 +569,7 @@ async function openMsgMenu(m: MessageRow): Promise<void> {
       },
       { text: '选择文本', icon: textOutline, data: 'select' },
       { text: '转发', icon: arrowRedoOutline, data: 'forward' },
+      ...(canRecall ? [{ text: '撤回', icon: arrowUndoOutline, data: 'recall' }] : []),
       { text: '取消', icon: closeOutline, role: 'cancel' },
     ],
   });
@@ -412,7 +578,52 @@ async function openMsgMenu(m: MessageRow): Promise<void> {
   pickedBody.value = m.body;
   if (data === 'select') selectOpen.value = true;
   if (data === 'forward') forwardOpen.value = true;
+  if (data === 'recall') await recall(m);
 }
+
+// ---------- 撤回 + 10 分钟内可重新编辑 ----------
+const reedit = ref<{ text: string; at: number } | null>(null);
+let reeditTimer = 0;
+
+async function recall(m: MessageRow): Promise<void> {
+  const { data, error } = await recallMessage(m.id);
+  if (error) {
+    void showToast('撤回失败：' + error.message);
+    return;
+  }
+  // 本地立即标记，别等广播
+  const i = rows.value.findIndex(r => r.id === m.id);
+  if (i >= 0) rows.value[i] = data as MessageRow;
+
+  // 文字消息才保留「重新编辑」，10 分钟有效
+  if (m.media_type === 'text' || !m.media_type) {
+    reedit.value = { text: m.body, at: Date.now() };
+    window.clearTimeout(reeditTimer);
+    reeditTimer = window.setTimeout(() => { reedit.value = null; }, 10 * 60 * 1000);
+  } else {
+    reedit.value = null;
+  }
+}
+
+function doReedit(): void {
+  if (!reedit.value) return;
+  text.value = reedit.value.text;
+  reedit.value = null;
+  window.clearTimeout(reeditTimer);
+  void nextTick(() => { fitTextarea(); ta.value?.focus(); });
+}
+
+function dismissReedit(): void {
+  reedit.value = null;
+  window.clearTimeout(reeditTimer);
+}
+
+// 别人撤回 / 另一台设备撤回：实时刷新那一行
+on('message-updated', (m: MessageRow) => {
+  if (m.conversation_id !== cid.value) return;
+  const i = rows.value.findIndex(r => r.id === m.id);
+  if (i >= 0) rows.value[i] = m;
+});
 
 async function forwardTo(ids: string[]): Promise<void> {
   const uid = myId();
@@ -586,6 +797,39 @@ ion-content.plain { --background: var(--md-surface); }
 .head { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .head .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* 已撤回：居中系统提示 */
+.recalled {
+  align-self: center;
+  margin: 6px 12px;
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+  background: rgba(127, 127, 127, 0.12);
+  padding: 5px 10px;
+  border-radius: 10px;
+}
+
+/* 撤回后的「重新编辑」浮条 */
+.reedit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 12px 6px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--md-surface-container-high);
+  font-size: 13px;
+  color: var(--md-on-surface-variant);
+}
+.reedit .rtext { flex: 1; }
+.reedit .rdo {
+  border: 0; background: transparent; color: var(--md-primary);
+  font-size: 13px; font-weight: 500; padding: 4px 6px;
+}
+.reedit .rx {
+  border: 0; background: transparent; color: var(--md-on-surface-variant);
+  font-size: 14px; padding: 2px 4px;
+}
+
 .msgs { display: flex; flex-direction: column; gap: 6px; padding: 12px 12px 16px; }
 .more { align-self: center; margin: 6px 0; }
 .day {
@@ -638,5 +882,21 @@ ion-content.plain { --background: var(--md-surface); }
   overflow-y: hidden;
 }
 .ta::placeholder { color: var(--md-on-surface-variant); }
+.cbtn {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  display: grid;
+  place-items: center;
+  font-size: 21px;
+}
+.cbtn:disabled { opacity: .45; }
+.cbtn.rec { color: #e5484d; animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .45; } }
+
 .send { --padding-start: 0; --padding-end: 0; --border-radius: 16px; width: 48px; height: 48px; margin: 0; }
 </style>

@@ -45,9 +45,9 @@ export type Database = {
         Relationships: [];
       };
       messages: {
-        Row: { id: string; conversation_id: string; sender_id: string; body: string; created_at: string };
-        Insert: { id?: string; conversation_id: string; sender_id: string; body: string; created_at?: string };
-        Update: { body?: string };
+        Row: { id: string; conversation_id: string; sender_id: string; body: string; created_at: string; media_type: 'text' | 'image' | 'audio' | 'video' | 'file'; media_path: string | null; media_name: string | null; media_mime: string | null; media_size: number | null; media_duration: number | null; expires_at: string | null; is_expired: boolean; recalled_at: string | null };
+        Insert: { id?: string; conversation_id: string; sender_id: string; body: string; created_at?: string; media_type?: 'text' | 'image' | 'audio' | 'video' | 'file'; media_path?: string | null; media_name?: string | null; media_mime?: string | null; media_size?: number | null; media_duration?: number | null; expires_at?: string | null; is_expired?: boolean; recalled_at?: string | null };
+        Update: { body?: string; media_path?: string | null; is_expired?: boolean; recalled_at?: string | null };
         Relationships: [];
       };
       push_tokens: {

@@ -73,6 +73,39 @@ ion-alert .alert-button { border-radius: 14px; text-transform: none; font-weight
 ion-action-sheet .action-sheet-group { border-radius: 28px; background: var(--md-surface-container-high); }
 ion-action-sheet .action-sheet-cancel { border-radius: 28px; }
 ion-action-sheet { --button-background: transparent; }
+
+/* 长按菜单：浮起来的圆角卡片，和 App 里其他弹窗统一 */
+ion-action-sheet { --background: transparent; }
+ion-action-sheet .action-sheet-wrapper {
+  padding: 0 12px calc(14px + var(--ion-safe-area-bottom, 0px));
+}
+ion-action-sheet .action-sheet-group {
+  border-radius: 22px !important;
+  background: var(--md-surface-container-high) !important;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+ion-action-sheet .action-sheet-title {
+  color: var(--md-on-surface-variant);
+  font-size: 13px;
+  padding: 14px 18px 6px;
+}
+ion-action-sheet .action-sheet-button {
+  --color: var(--md-on-surface);
+  color: var(--md-on-surface);
+  font-size: 16px;
+  min-height: 54px;
+  padding: 0 18px;
+}
+ion-action-sheet .action-sheet-button .action-sheet-icon {
+  color: var(--md-on-surface-variant);
+  margin-right: 16px;
+  font-size: 22px;
+}
+ion-action-sheet .action-sheet-cancel {
+  color: var(--md-primary);
+  font-weight: 500;
+}
 ion-toast { --border-radius: 14px; --background: var(--md-inverse-surface); --color: var(--md-inverse-on-surface); --button-color: var(--md-inverse-primary); }
 ion-modal.m3-dialog {
   --width: min(92vw, 420px);

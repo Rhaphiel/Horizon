@@ -6,6 +6,7 @@ type MessageRecord = {
   conversation_id: string;
   sender_id: string;
   body: string | null;
+  media_type?: string | null;
   created_at: string;
 };
 
@@ -86,7 +87,14 @@ Deno.serve(async (req) => {
     const title = conversation?.type === "group" && conversation?.name
       ? `${conversation.name} · ${senderName}`
       : senderName;
-    const body = (message.body || "（新消息）").replace(/\s+/g, " ").slice(0, 160);
+    const mediaType = (message.media_type || "text").toLowerCase();
+  const mediaText =
+    mediaType === "image" ? "[图片] 24 小时内有效"
+      : mediaType === "audio" ? "[语音] 24 小时内有效"
+        : mediaType === "video" ? "[视频] 24 小时内有效"
+          : mediaType === "file" ? "[文件] 24 小时内有效"
+            : "";
+  const body = (mediaText || (message.body || "（新消息）")).replace(/\s+/g, " ").slice(0, 160);
 
     const jwtClient = new JWT({
       email: serviceAccount.client_email,

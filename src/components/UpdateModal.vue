@@ -8,6 +8,7 @@
         </div>
 
         <p class="ver">发现新版本：v{{ info.version }}</p>
+        <p class="ver sub">下载：GitHub Releases · {{ info.page.replace('https://github.com/', '') }}</p>
 
         <div class="body">
           <template v-if="info.body">
@@ -77,6 +78,7 @@ function go(): void {
 }
 .upd-head h2 { margin: 0; font-size: 22px; font-weight: 600; }
 .ver { margin: 14px 0 12px; font-size: 15px; color: var(--md-on-surface-variant, #bbb); }
+.ver.sub { margin: 0 0 12px; font-size: 12px; opacity: .75; word-break: break-all; }
 .body {
   max-height: 42vh;
   overflow: auto;

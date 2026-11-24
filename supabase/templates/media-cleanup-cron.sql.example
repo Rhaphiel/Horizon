@@ -1,0 +1,28 @@
+-- 每 15 分钟调用一次 cleanup-media 的定时任务（pg_cron + pg_net）
+-- 用法：Supabase SQL Editor 里把 <REF> 和 <SERVICE_ROLE_KEY> 换成真实值后执行一次。
+-- 注意：service_role key 不要提交进仓库，此文件只是模板。
+
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+-- 先删掉旧的（如果有），避免重复调度
+select cron.unschedule('horizon-cleanup-media')
+where exists (select 1 from cron.job where jobname = 'horizon-cleanup-media');
+
+select cron.schedule(
+  'horizon-cleanup-media',
+  '*/15 * * * *',
+  $$
+  select net.http_post(
+    url := 'https://<REF>.supabase.co/functions/v1/cleanup-media',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer <SERVICE_ROLE_KEY>'
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
+
+-- 查看调度是否生效
+select jobid, jobname, schedule, active from cron.job where jobname = 'horizon-cleanup-media';
