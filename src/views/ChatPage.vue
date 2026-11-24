@@ -486,7 +486,15 @@ async function toggleRecord(): Promise<void> {
     recording.value = true;
     note.value = '录音中… 再点一下麦克风发送';
   } catch (err) {
-    note.value = '无法录音：' + (err instanceof Error ? err.message : '请检查麦克风权限');
+    const e = err as { name?: string; message?: string };
+    if (e?.name === 'NotAllowedError' || /permission/i.test(e?.message || '')) {
+      note.value = '麦克风权限被拒绝：请到 系统设置 → 应用 → Horizon → 权限 → 麦克风 里打开';
+      void showToast('需要麦克风权限才能发语音', 2400);
+    } else if (e?.name === 'NotFoundError') {
+      note.value = '没有找到麦克风设备';
+    } else {
+      note.value = '无法录音：' + (e?.message || '请检查麦克风权限');
+    }
   }
 }
 
@@ -860,7 +868,7 @@ ion-content.plain { --background: var(--md-surface); }
 .meta { font-size: 11px; opacity: 0.7; text-align: right; margin-top: 2px; }
 
 .note { padding: 4px 16px; font-size: 12px; color: var(--md-error); }
-.composer { display: flex; align-items: flex-end; gap: 8px; padding: 4px 8px; }
+.composer { display: flex; align-items: center; gap: 6px; padding: 4px 8px; }
 .ta {
   flex: 1;
   min-width: 0;
@@ -884,10 +892,10 @@ ion-content.plain { --background: var(--md-surface); }
 .ta::placeholder { color: var(--md-on-surface-variant); }
 .cbtn {
   flex: none;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 48px;
   border: 0;
-  border-radius: 50%;
+  border-radius: 14px;
   background: transparent;
   color: var(--md-on-surface-variant);
   display: grid;
