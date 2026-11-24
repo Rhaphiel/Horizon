@@ -662,7 +662,7 @@ ion-searchbar.pill {
 }
 
 .row { --padding-start: 16px; --padding-end: 16px; --min-height: 76px; --background: transparent; }
-.row h2 { font-size: 17px; font-weight: 500; margin: 0 0 2px; }
+.row h2 { display: flex; align-items: center; gap: 6px; font-size: 17px; font-weight: 500; margin: 0 0 2px; }
 .row p { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; }
 .row :deep(.avatar) { margin-right: 14px; }
 .end { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; align-self: flex-start; padding-top: 14px; }
@@ -689,4 +689,5 @@ ion-searchbar.pill {
 .pv-label { font-size: 11px; color: var(--md-on-surface-variant); }
 .pv-row { display: flex; align-items: center; gap: 10px; }
 .pv-name { font-size: 15px; font-weight: 500; }
+.row .ttl { margin-left: 0; line-height: 1; }
 </style>

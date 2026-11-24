@@ -320,7 +320,7 @@ watch(
 .mem { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
 .mem + .mem, .add + .mem { border-top: 1px solid rgba(255,255,255,.06); }
 .mi { flex: 1; min-width: 0; }
-.mi b { display: block; font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mi b { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mi b em { font-style: normal; color: var(--md-on-surface-variant); font-weight: 400; }
 .mi small { font-size: 12px; color: var(--md-on-surface-variant); }
 .owner {

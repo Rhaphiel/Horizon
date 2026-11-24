@@ -7,9 +7,9 @@ export type Database = {
   public: {
     Tables: {
       profiles: {
-        Row: { id: string; username: string; avatar_url: string | null; horizon_id: number | null; id_searchable: boolean; shown_title: string | null; created_at: string };
-        Insert: { id: string; username: string; avatar_url?: string | null; horizon_id?: number | null; id_searchable?: boolean; shown_title?: string | null; created_at?: string };
-        Update: { id?: string; username?: string; avatar_url?: string | null; horizon_id?: number | null; id_searchable?: boolean; shown_title?: string | null; created_at?: string };
+        Row: { id: string; username: string; avatar_url: string | null; horizon_id: number | null; id_searchable: boolean; shown_title: string | null; handle: string | null; handle_set_at: string | null; created_at: string };
+        Insert: { id: string; username: string; avatar_url?: string | null; horizon_id?: number | null; id_searchable?: boolean; shown_title?: string | null; handle?: string | null; handle_set_at?: string | null; username_changed_at?: string | null; created_at?: string };
+        Update: { id?: string; username?: string; avatar_url?: string | null; horizon_id?: number | null; id_searchable?: boolean; shown_title?: string | null; handle?: string | null; handle_set_at?: string | null; username_changed_at?: string | null; created_at?: string };
         Relationships: [];
       };
       friendships: {
@@ -156,6 +156,10 @@ export type Database = {
         Returns: string;
       };
       is_owner: { Args: Record<PropertyKey, never>; Returns: boolean };
+      change_username: { Args: { new_name: string }; Returns: undefined };
+      set_handle: { Args: { new_handle: string }; Returns: undefined };
+      find_for_login: { Args: { identifier: string }; Returns: { id: string; username: string; handle: string | null }[] };
+      is_username_ok: { Args: { u: string }; Returns: boolean };
       find_by_horizon_id: {
         Args: { hid: number };
         Returns: { id: string; username: string; avatar_url: string | null }[];

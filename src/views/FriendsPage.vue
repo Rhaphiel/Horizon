@@ -51,8 +51,8 @@
         <ion-list v-show="open.incoming">
           <ion-item v-for="f in friendState.incoming" :key="f.rowId">
             <Avatar slot="start" :name="f.name" :size="44" :src="avatarOf(f.id)" />
-            <ion-label>
-              <span :style="nameStyle(titleOf(f.id))">{{ f.name }}</span>
+            <ion-label class="friend-label">
+              <span class="nm" :style="nameStyle(titleOf(f.id))">{{ f.name }}</span>
               <span v-if="titleOf(f.id)" class="ttl" :style="titleStyle(titleOf(f.id)!)">{{ titleOf(f.id)!.text }}</span>
             </ion-label>
             <ion-button slot="end" size="small" fill="outline" @click="accept(f.rowId)">同意</ion-button>
@@ -72,8 +72,8 @@
         <ion-list v-show="open.friends">
           <ion-item v-for="f in friendState.friends" :key="f.rowId" :detail="false">
             <Avatar slot="start" :name="f.name" :size="44" :src="avatarOf(f.id)" />
-            <ion-label>
-              <span :style="nameStyle(titleOf(f.id))">{{ f.name }}</span>
+            <ion-label class="friend-label">
+              <span class="nm" :style="nameStyle(titleOf(f.id))">{{ f.name }}</span>
               <span v-if="titleOf(f.id)" class="ttl" :style="titleStyle(titleOf(f.id)!)">{{ titleOf(f.id)!.text }}</span>
             </ion-label>
             <ion-button slot="end" size="small" fill="clear" color="danger" @click="removeFriend(f)">删除</ion-button>
@@ -92,8 +92,8 @@
         <ion-list v-show="open.outgoing">
           <ion-item v-for="f in friendState.outgoing" :key="f.rowId">
             <Avatar slot="start" :name="f.name" :size="44" :src="avatarOf(f.id)" />
-            <ion-label>
-              <span :style="nameStyle(titleOf(f.id))">{{ f.name }}</span>
+            <ion-label class="friend-label">
+              <span class="nm" :style="nameStyle(titleOf(f.id))">{{ f.name }}</span>
               <span v-if="titleOf(f.id)" class="ttl" :style="titleStyle(titleOf(f.id)!)">{{ titleOf(f.id)!.text }}</span>
             </ion-label>
             <ion-button slot="end" size="small" fill="clear" @click="remove(f.rowId)">撤回</ion-button>
@@ -266,4 +266,9 @@ ion-item :deep(.avatar) { margin-right: 14px; }
 .group-count { font-size: 12px; color: var(--md-on-surface-variant); }
 .group ion-list { padding-top: 0; }
 .ttl { margin-left: 6px; padding: 1px 6px; border-radius: 8px; font-size: 11px; font-weight: 600; background: rgba(127,127,127,.16); }
+/* 好友行：名字 + 称号与右侧「删除」同一水平线 */
+.friend-label { display: flex; align-items: center; gap: 6px; }
+.friend-label .nm { line-height: 1.2; }
+.friend-label .ttl { margin-left: 0; line-height: 1; display: inline-flex; align-items: center; }
+ion-item { --min-height: 56px; }
 </style>

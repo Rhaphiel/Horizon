@@ -969,7 +969,7 @@ watch(
   border-radius: 999px;
 }
 .title-cap .tt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.title-cap b { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title-cap b { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .title-cap small { font-size: 11px; color: var(--md-on-surface-variant); }
 .cap-btn {
   flex: none;
@@ -1082,7 +1082,7 @@ ion-content.plain { --background: var(--md-surface); }
 }
 .msg.mine .bubble { background: linear-gradient(135deg, var(--out-bg), var(--out-bg2)); color: var(--out-fg); border-radius: 18px 18px 4px 18px; }
 .msg.flash .bubble { outline: 2px solid var(--md-primary); outline-offset: 2px; }
-.who { font-size: 12px; font-weight: 500; opacity: 0.85; margin-bottom: 2px; }
+.who { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; opacity: 0.85; margin-bottom: 2px; }
 .body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.4; }
 .meta { font-size: 11px; opacity: 0.7; text-align: right; margin-top: 2px; }
 

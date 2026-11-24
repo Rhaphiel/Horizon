@@ -36,7 +36,7 @@
           <span class="ind">
             <ion-icon class="off" :icon="personCircleOutline" />
             <ion-icon class="on" :icon="personCircle" />
-            <ion-label>我的</ion-label>
+            <ion-label>账号</ion-label>
           </span>
         </ion-tab-button>
       </ion-tab-bar>

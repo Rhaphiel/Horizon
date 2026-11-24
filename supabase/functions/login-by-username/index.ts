@@ -37,9 +37,8 @@ Deno.serve(async (req) => {
   } catch {
     return json({ error: "invalid_login" }, 401);
   }
-  // username 字段同时接受「用户名」和「HorizonID」（纯数字）
-  const byId = /^\d{5,}$/.test(username);
-  if (!byId && !/^[A-Za-z0-9_]{3,20}$/.test(username)) return json({ error: "invalid_login" }, 401);
+  // 接受「账号名(handle)」或「HorizonID」；邮箱由客户端直接走 Auth
+  if (!/^(\d{5,}|[A-Za-z0-9_]{3,20})$/.test(username)) return json({ error: "invalid_login" }, 401);
   if (!password) return json({ error: "invalid_login" }, 401);
 
   const url = Deno.env.get("SUPABASE_URL")!;
@@ -47,9 +46,9 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // 纯数字 → 按 HorizonID；否则按用户名（不区分大小写）
+  // 账号名（不区分大小写）或 HorizonID
   let prof: { id: string; username: string } | null = null;
-  if (byId) {
+  if (/^\d{5,}$/.test(username)) {
     const { data } = await admin
       .from("profiles")
       .select("id, username")
@@ -60,9 +59,9 @@ Deno.serve(async (req) => {
     const { data } = await admin
       .from("profiles")
       .select("id, username")
-      .ilike("username", username.replace(/_/g, "\\_"))
+      .ilike("handle", username)
       .maybeSingle();
-    prof = data && data.username.toLowerCase() === username.toLowerCase() ? data : null;
+    prof = data ?? null;
   }
   if (!prof) return json({ error: "invalid_login" }, 401);
 

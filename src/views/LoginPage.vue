@@ -15,7 +15,7 @@
             v-model="identifier"
             class="m3-field"
             fill="outline"
-            label="用户名 / HorizonID / 邮箱"
+            label="账号名 / HorizonID / 邮箱"
             label-placement="floating"
             autocomplete="username"
             autocapitalize="off"
@@ -30,13 +30,24 @@
             v-model="username"
             class="m3-field"
             fill="outline"
-            label="用户名（3–20 位，字母、数字或下划线）"
+            label="用户名（2–20 个字符，支持汉字 / 假名 / 字母）"
             label-placement="floating"
             :maxlength="20"
             autocomplete="username"
             autocapitalize="off"
           />
           <ion-input v-model="email" class="m3-field" fill="outline" label="邮箱" label-placement="floating" type="email" autocomplete="email" />
+          <ion-input
+            v-if="regStep === 'code'"
+            v-model="code"
+            class="m3-field"
+            fill="outline"
+            label="邮箱验证码（6 位）"
+            label-placement="floating"
+            inputmode="numeric"
+            :maxlength="6"
+            autocomplete="one-time-code"
+          />
         </template>
 
         <ion-input
@@ -61,7 +72,8 @@
           </ion-button>
         </ion-input>
 
-        <ion-button expand="block" size="large" :disabled="busy" @click="submit">{{ mode === 'login' ? '登录' : '注册' }}</ion-button>
+        <ion-button expand="block" size="large" :disabled="busy" @click="submit">{{ mode === 'login' ? '登录' : (regStep === 'code' ? '验证并完成注册' : '发送验证码并注册') }}</ion-button>
+        <button v-if="mode === 'login'" class="link" type="button" @click="forgot">忘记密码？</button>
         <p v-if="msg" :class="['msg', { ok: msgOk }]">{{ msg }}</p>
       </div>
     </ion-content>
@@ -70,7 +82,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { IonPage, IonContent, IonSegment, IonSegmentButton, IonLabel, IonInput, IonButton, IonIcon } from '@ionic/vue';
+import { IonPage, IonContent, IonSegment, IonSegmentButton, IonLabel, IonInput, IonButton, IonIcon, alertController } from '@ionic/vue';
 import { eye, eyeOff } from 'ionicons/icons';
 import { db } from '@/lib/supabase';
 import { friendlyAuthError } from '@/lib/errors';
@@ -81,6 +93,8 @@ const username = ref('');     // 注册用
 const email = ref('');        // 注册用
 const password = ref('');
 const showPwd = ref(false);   // 眼睛：临时显示密码
+const code = ref('');
+const regStep = ref<'form' | 'code'>('form');
 const busy = ref(false);
 const msg = ref('');
 const msgOk = ref(false);
@@ -115,6 +129,50 @@ async function loginWithUsername(name: string, pwd: string): Promise<string | nu
   return e2 ? friendlyAuthError(e2.message) : null;
 }
 
+// 忘记密码：发验证码 → 输入验证码 + 新密码
+async function forgot(): Promise<void> {
+  const first = await alertController.create({
+    header: '重置密码',
+    message: '输入注册时用的邮箱，我们会发 6 位验证码',
+    inputs: [{ name: 'mail', type: 'email', value: email.value || '', placeholder: '邮箱' }],
+    buttons: [
+      { text: '取消', role: 'cancel' },
+      { text: '发送验证码', handler: (d) => { void sendResetCode(String(d?.mail ?? '')); } },
+    ],
+  });
+  await first.present();
+}
+
+async function sendResetCode(mail: string): Promise<void> {
+  const m = mail.trim();
+  if (!m) { say('请填写邮箱'); return; }
+  const { error } = await db.auth.signInWithOtp({ email: m, options: { shouldCreateUser: false } });
+  if (error) { say('发送失败：' + error.message); return; }
+
+  const second = await alertController.create({
+    header: '输入验证码',
+    message: '验证码已发送到 ' + m + '，请填写验证码和新密码',
+    inputs: [
+      { name: 'code', type: 'tel', placeholder: '6 位验证码' },
+      { name: 'pwd', type: 'password', placeholder: '新密码（至少 6 位）' },
+    ],
+    buttons: [
+      { text: '取消', role: 'cancel' },
+      { text: '重置', handler: (d) => { void doReset(m, String(d?.code ?? ''), String(d?.pwd ?? '')); } },
+    ],
+  });
+  await second.present();
+}
+
+async function doReset(mail: string, codeText: string, pwd: string): Promise<void> {
+  if (!codeText.trim() || pwd.length < 6) { say('请填写验证码和至少 6 位的新密码'); return; }
+  const { error: vErr } = await db.auth.verifyOtp({ email: mail, token: codeText.trim(), type: 'email' });
+  if (vErr) { say('验证码不正确：' + vErr.message); return; }
+  const { error: uErr } = await db.auth.updateUser({ password: pwd });
+  if (uErr) { say('修改密码失败：' + uErr.message); return; }
+  say('密码已重置，请用新密码登录', true);
+}
+
 async function submit(): Promise<void> {
   const pwd = password.value ?? '';
   busy.value = true;
@@ -123,14 +181,29 @@ async function submit(): Promise<void> {
     if (mode.value === 'register') {
       const name = (username.value ?? '').trim();
       const mail = (email.value ?? '').trim();
+
+      // 第二步：校验验证码
+      if (regStep.value === 'code') {
+        if (!code.value.trim()) return say('请输入邮箱验证码');
+        const { error } = await db.auth.verifyOtp({ email: mail, token: code.value.trim(), type: 'signup' });
+        if (error) return say(friendlyAuthError(error.message));
+        say('注册成功，正在进入…', true);
+        return;
+      }
+
+      // 第一步：发验证码
       if (!mail || !pwd) return say('请填写邮箱和密码');
-      if (!/^[A-Za-z0-9_]{3,20}$/.test(name)) return say('用户名需为 3–20 位字母、数字或下划线');
+      if (!(name.length >= 2 && name.length <= 20)) return say('用户名需为 2–20 个字符');
+      if (pwd.length < 6) return say('密码至少 6 位');
       const { data, error } = await db.auth.signUp({ email: mail, password: pwd, options: { data: { username: name } } });
       if (error) return say(friendlyAuthError(error.message));
-      if (!data.session) return say('注册成功，请先到邮箱点击确认链接，再回来登录', true);
+      if (data.session) { say('注册成功，正在进入…', true); return; }
+      regStep.value = 'code';
+      return say('验证码已发送到邮箱，请填写下面的 6 位数字', true);
     } else {
       const id = (identifier.value ?? '').trim();
-      if (!id || !pwd) return say('请填写用户名（或邮箱）和密码');
+      if (!id || !pwd) return say('请填写 HorizonID（或邮箱）和密码');
+  if (!id.includes('@') && !/^[0-9]{5,}$/.test(id) && !/^[A-Za-z0-9_]{3,20}$/.test(id)) return say('请使用账号名、HorizonID 或邮箱登录');
       if (id.includes('@')) {
         const { error } = await db.auth.signInWithPassword({ email: id, password: pwd });
         if (error) return say(friendlyAuthError(error.message));
@@ -160,4 +233,5 @@ h1 { font-size: 32px; font-weight: 500; margin: 0 0 8px; color: var(--md-primary
   margin-inline-end: -6px;
   color: var(--md-on-surface-variant);
 }
+.link { align-self: center; margin-top: 2px; border: 0; background: transparent; color: var(--md-primary); font-size: 14px; }
 </style>
