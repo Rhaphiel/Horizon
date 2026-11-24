@@ -35,7 +35,9 @@
             <ion-button v-else-if="friendState.relations[u.id].status === 'accepted'" slot="end" size="small" fill="clear" disabled>已是好友</ion-button>
             <ion-button v-else-if="friendState.relations[u.id].incoming" slot="end" size="small" fill="outline" @click="accept(friendState.relations[u.id].rowId)">同意</ion-button>
           </ion-item>
-          <ion-item v-if="!results.length" lines="none"><ion-label color="medium">没有找到这个用户</ion-label></ion-item>
+          <ion-item v-if="!results.length" lines="none">
+            <ion-label color="medium">{{ emptySearchText }}</ion-label>
+          </ion-item>
         </ion-list>
       </template>
 
@@ -118,9 +120,14 @@ import { myId } from '@/stores/session';
 
 const q = ref('');
 
+// 纯数字搜索时，查不到通常是「对方关了 ID 查找」
+const emptySearchText = computed(() => (/^[0-9]{5,}$/.test(q.value.trim())
+  ? '该用户不存在，或对方关闭了通过 ID 查找'
+  : '没有找到这个用户'));
+
 // ---- ID 可见性 ----
 const horizonId = ref<number | null>(null);
-const idSearchable = ref(true);
+const idSearchable = ref(false);
 const profileLoaded = ref(false);
 const idToggleVisible = computed(() => profileLoaded.value);   // 所有人都有这个开关
 
@@ -142,7 +149,7 @@ async function loadIdPrefs(): Promise<void> {
   if (!uid) return;
   const { data } = await db.from('profiles').select('horizon_id,id_searchable').eq('id', uid).maybeSingle();
   horizonId.value = (data?.horizon_id as number | undefined) ?? null;
-  idSearchable.value = (data?.id_searchable as boolean | undefined) ?? true;
+  idSearchable.value = (data?.id_searchable as boolean | undefined) ?? false;
   profileLoaded.value = true;
   try {
     localStorage.setItem(ME_KEY, JSON.stringify({ id: uid, horizonId: horizonId.value, idSearchable: idSearchable.value }));

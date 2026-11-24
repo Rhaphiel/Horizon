@@ -24,9 +24,16 @@ type GhRelease = {
   assets?: { name?: string; browser_download_url?: string }[];
 };
 
+// 把 "v0.5" / "0.5" / "Horizon-v0.5.1" 都解析成 [0,5,0] 这种三段
 function parts(v: string): number[] {
-  const m = /(\d+)\.(\d+)\.(\d+)/.exec(v);
-  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : [0, 0, 0];
+  const m = /(\d+)(?:\.(\d+))?(?:\.(\d+))?/.exec(v);
+  if (!m) return [0, 0, 0];
+  return [Number(m[1] || 0), Number(m[2] || 0), Number(m[3] || 0)];
+}
+
+function normalize(v: string): string {
+  const p = parts(v);
+  return p.join('.');
 }
 
 function isNewer(a: string, b: string): boolean {

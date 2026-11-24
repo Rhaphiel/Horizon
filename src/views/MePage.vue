@@ -88,7 +88,7 @@ const uploading = ref(false);
 const cropOpen = ref(false);
 const cropSrc = ref('');
 const horizonId = ref<number | null>(null);
-const idSearchable = ref(true);
+const idSearchable = ref(false);
 const profileLoaded = ref(false);
 const isOwnerId = computed(() => horizonId.value === 100001);
 const updatePushOn = ref(localStorage.getItem('hz:update-push') !== '0');
@@ -131,7 +131,7 @@ async function loadHorizonId(): Promise<void> {
   if (!uid) return;
   const { data } = await db.from('profiles').select('horizon_id,id_searchable').eq('id', uid).maybeSingle();
   horizonId.value = (data?.horizon_id as number | undefined) ?? null;
-  idSearchable.value = (data?.id_searchable as boolean | undefined) ?? true;
+  idSearchable.value = (data?.id_searchable as boolean | undefined) ?? false;
   profileLoaded.value = true;
   try {
     localStorage.setItem(ME_KEY, JSON.stringify({
