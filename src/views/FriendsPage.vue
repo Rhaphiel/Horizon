@@ -77,7 +77,7 @@
               <span v-if="titleOf(f.id)" class="ttl" :style="titleStyle(titleOf(f.id)!)">{{ titleOf(f.id)!.text }}</span>
             </ion-label>
             
-            <ion-button slot="end" size="small" fill="outline" :disabled="dmBusy === f.id" @click="chatWith(f)">发消息</ion-button>
+            
             <ion-button slot="end" size="small" fill="clear" color="danger" @click="removeFriend(f)">删除</ion-button>
           </ion-item>
           <ion-item v-if="!friendState.friends.length" lines="none"><ion-label color="medium">还没有好友，先搜索添加吧</ion-label></ion-item>
@@ -116,8 +116,6 @@ import Avatar from '@/components/Avatar.vue';
 import { avatarOf, ensureAvatars } from '@/stores/directory';
 import { ensureTitles, titleOf, titleStyle, nameStyle } from '@/stores/titles';
 import { confirmDialog, showToast } from '@/lib/toast';
-import { startDm } from '@/services/chatApi';
-import { openChat } from '@/services/navigation';
 import { db } from '@/lib/supabase';
 import { myId } from '@/stores/session';
 const q = ref('');
@@ -248,23 +246,7 @@ async function removeFriend(f: FriendRow): Promise<void> {
         return;
     await run(removeFriendship(f.rowId), '已删除');
 }
-const dmBusy = ref<string | null>(null);
-async function chatWith(f: FriendRow): Promise<void> {
-    if (dmBusy.value)
-        return;
-    dmBusy.value = f.id;
-    try {
-        const r = await startDm(f.id);
-        if (r.error || !r.id) {
-            void showToast(r.error || '打开聊天失败');
-            return;
-        }
-        await openChat(r.id);
-    }
-    finally {
-        dmBusy.value = null;
-    }
-}
+
 </script>
 
 <style scoped>

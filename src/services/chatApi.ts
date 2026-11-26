@@ -1,16 +1,7 @@
 import { db } from '@/lib/supabase';
 import { friendlyRpcError } from '@/lib/errors';
 import { chats, getChat, loadChats, removeChat } from '@/stores/chats';
-export async function startDm(friendId: string): Promise<{
-    id: string | null;
-    error: string | null;
-}> {
-    const { data, error } = await db.rpc('create_dm', { friend: friendId });
-    if (error || !data)
-        return { id: null, error: friendlyRpcError(error?.message) };
-    await loadChats();
-    return { id: data, error: null };
-}
+
 export async function createGroup(name: string, memberIds: string[]): Promise<{
     id: string | null;
     error: string | null;
@@ -122,4 +113,3 @@ export async function migrateLocalMutes(): Promise<void> {
             await setMuted(cid, true);
     }
 }
-export const isViewing = (cid: string): boolean => chats.openId === cid;

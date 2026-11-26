@@ -43,6 +43,14 @@
             {{ recallText(it.msg) }}
           </div>
           <div v-else-if="it.msg" :class="['msg', { mine: it.msg.sender_id === me, flash: it.msg.id === flashId, cont: !!it.cont }]" :data-id="it.msg.id">
+            <div v-if="it.msg.sender_id !== me && isGroup" class="ava-slot">
+              <Avatar
+                v-if="!it.cont"
+                :size="30"
+                :name="nameOf(it.msg.sender_id)"
+                :src="avatarOf(it.msg.sender_id)"
+              />
+            </div>
             <div
               class="bubble"
               @pointerdown="pressStart($event, it.msg)"
@@ -116,12 +124,24 @@
         <button type="button" class="q-x" aria-label="取消引用" @click="clearReply">✕</button>
       </div>
 
+      <div v-if="drawerOpen && !blocked" class="attach-drawer glass">
+        <button type="button" class="attach-item" :disabled="busyMedia" @click="drawerImage">
+          <span class="attach-ico"><ion-icon :icon="imageOutline" /></span>
+          <span>相册图片</span>
+        </button>
+        <button type="button" class="attach-item" :disabled="busyMedia" @click="drawerCamera">
+          <span class="attach-ico"><ion-icon :icon="cameraOutline" /></span>
+          <span>拍摄</span>
+        </button>
+      </div>
+
       <div class="composer glass">
-        
-        <button class="cbtn" type="button" aria-label="发送图片" :disabled="busyMedia" @click="pickImage">
-          <ion-icon :icon="imageOutline" />
+
+        <button class="cbtn" :class="{ open: drawerOpen }" type="button" aria-label="更多功能" @click="drawerOpen = !drawerOpen">
+          <ion-icon :icon="addCircleOutline" />
         </button>
         <input ref="imgEl" type="file" accept="image/*" hidden @change="onImagePick" />
+        <input ref="camEl" type="file" accept="image/*" capture="environment" hidden @change="onCameraPick" />
 
         
         <textarea
@@ -185,7 +205,7 @@
 <script setup lang="ts">import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { IonPage, IonHeader, IonToolbar, IonButtons, IonButton, IonTitle, IonContent, IonFooter, IonSearchbar, IonList, IonItem, IonLabel, IonIcon, actionSheetController, onIonViewDidEnter, onIonViewWillEnter, onIonViewWillLeave, useIonRouter, } from '@ionic/vue';
-import { arrowBack, arrowRedoOutline, closeOutline, copyOutline, ellipsisVertical, imageOutline, micOutline, searchOutline, send as sendIcon, stopCircle, textOutline, arrowUndoOutline, returnUpBackOutline, notificationsOutline, notificationsOffOutline, informationCircleOutline, trashOutline } from 'ionicons/icons';
+import { arrowBack, arrowRedoOutline, addCircleOutline, cameraOutline, closeOutline, copyOutline, ellipsisVertical, imageOutline, micOutline, searchOutline, send as sendIcon, stopCircle, textOutline, arrowUndoOutline, returnUpBackOutline, notificationsOutline, notificationsOffOutline, informationCircleOutline, trashOutline } from 'ionicons/icons';
 import Avatar from '@/components/Avatar.vue';
 import SelectTextModal from '@/components/SelectTextModal.vue';
 import ForwardModal from '@/components/ForwardModal.vue';
@@ -485,6 +505,8 @@ function openViewer(m: MessageRow): void {
     viewerOpen.value = true;
 }
 const imgEl = ref<HTMLInputElement | null>(null);
+const camEl = ref<HTMLInputElement | null>(null);
+const drawerOpen = ref(false);
 const busyMedia = ref(false);
 const recording = ref(false);
 let recorder: MediaRecorder | null = null;
@@ -494,6 +516,17 @@ let discarded: MediaRecorder | null = null;
 let pageLeft = false;
 function pickImage(): void {
     imgEl.value?.click();
+}
+function drawerImage(): void {
+    drawerOpen.value = false;
+    pickImage();
+}
+function drawerCamera(): void {
+    drawerOpen.value = false;
+    camEl.value?.click();
+}
+async function onCameraPick(e: Event): Promise<void> {
+    await onImagePick(e);
 }
 async function onImagePick(e: Event): Promise<void> {
     const input = e.target as HTMLInputElement;
@@ -1212,8 +1245,12 @@ ion-content.plain { --background: var(--md-surface); }
   align-self: center; margin: 8px 0 4px; padding: 3px 12px; border-radius: 12px;
   background: var(--pill-bg); color: var(--pill-fg); font-size: 12px;
 }
-.msg { max-width: 78%; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
-.msg.cont { margin-top: -3px; }
+.msg { max-width: 84%; min-width: 0; display: flex; flex-direction: row; align-items: flex-end; gap: 8px; }
+.msg.mine { justify-content: flex-end; }
+.ava-slot { flex: none; width: 30px; display: flex; align-items: flex-end; }
+.ava-slot :deep(.avatar) { border-radius: 50%; }
+.msg .bubble { min-width: 0; }
+.msg.cont { margin-top: 2px; }
 .msg.cont .bubble { border-top-left-radius: 8px; }
 .msg.mine.cont .bubble { border-top-left-radius: 18px; border-top-right-radius: 8px; }
 .msg.mine { align-self: flex-end; align-items: flex-end; }
@@ -1283,7 +1320,24 @@ ion-content.plain { --background: var(--md-surface); }
   font-size: 21px;
 }
 .cbtn:disabled { opacity: .45; }
+.cbtn.open ion-icon { transform: rotate(45deg); transition: transform .18s ease; }
 .cbtn.rec { color: #e5484d; animation: pulse 1s infinite; }
+.attach-drawer {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 0 2px 8px;
+  padding: 12px 10px;
+  border-radius: 20px;
+}
+.attach-item {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 10px 4px; border: 0; border-radius: 14px;
+  background: var(--md-surface-container); color: var(--md-on-surface);
+  font-size: 12px;
+}
+.attach-item:disabled { opacity: .45; }
+.attach-ico { font-size: 22px; color: var(--md-on-surface-variant); display: grid; place-items: center; }
 @keyframes pulse { 50% { opacity: .45; } }
 
 .send { --padding-start: 0; --padding-end: 0; --border-radius: 16px; width: 48px; height: 48px; margin: 0; align-self: flex-end; opacity: .55; transition: opacity .18s ease, background-color .18s ease; }
