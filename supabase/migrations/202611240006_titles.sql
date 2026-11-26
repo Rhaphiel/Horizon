@@ -118,18 +118,27 @@ $$;
 grant execute on function public.grant_title(bigint, text, boolean, text, text) to authenticated;
 
 -- ---------- 5. 读取用视图（谁显示了哪个称号） ----------
-create or replace view public.profile_titles as
-select p.id as user_id,
-       p.username,
-       p.horizon_id,
-       t.title,
-       t.gradient,
-       t.gradient_from,
-       t.gradient_to,
-       p.shown_title
-  from public.profiles p
-  left join public.user_titles t on t.id = p.shown_title;
+-- 0.5.1：只在视图还不存在时建。0009 已经把它换成了新的列，
+-- 以前这里用 create or replace，0009 之后再执行本文件会报「cannot drop columns from view」
+do $$
+begin
+  if to_regclass('public.profile_titles') is null then
+    create view public.profile_titles with (security_invoker = true) as
+    select p.id as user_id,
+           p.username,
+           p.horizon_id,
+           t.title,
+           t.gradient,
+           t.gradient_from,
+           t.gradient_to,
+           p.shown_title
+      from public.profiles p
+      left join public.user_titles t on t.id = p.shown_title;
+  end if;
+end
+$$;
 
+revoke all on public.profile_titles from anon;
 grant select on public.profile_titles to authenticated;
 
 -- ---------- 6. 自检 ----------

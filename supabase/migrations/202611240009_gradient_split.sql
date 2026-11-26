@@ -82,7 +82,8 @@ grant update (
 -- 视图要换列名，必须先删后建（create or replace 不允许改列名）
 drop view if exists public.profile_titles;
 
-create view public.profile_titles as
+-- security_invoker（0.5.1）：按查询者的权限执行，不绕过行级安全；没登录（anon）读不到
+create view public.profile_titles with (security_invoker = true) as
 select p.id as user_id,
        p.username,
        p.horizon_id,
@@ -97,6 +98,7 @@ select p.id as user_id,
   from public.profiles p
   left join public.user_titles t on t.id = p.shown_title;
 
+revoke all on public.profile_titles from anon;
 grant select on public.profile_titles to authenticated;
 
 -- 自检
