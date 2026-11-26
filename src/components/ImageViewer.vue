@@ -17,74 +17,86 @@
   </Teleport>
 </template>
 
-<script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+<script setup lang="ts">import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { mediaUrl } from '@/services/mediaApi';
-
+import { useBackToClose } from '@/services/backButton';
 const props = defineProps<{
-  open: boolean;
-  paths: string[];
-  index: number;
+    open: boolean;
+    paths: string[];
+    index: number;
 }>();
-const emit = defineEmits<{ close: []; change: [index: number] }>();
-
+const emit = defineEmits<{
+    close: [
+    ];
+    change: [
+        index: number
+    ];
+}>();
 const url = ref<string | null>(null);
 const zoom = ref(1);
 const dragX = ref(0);
-
 const list = computed(() => props.paths.filter(Boolean));
+useBackToClose(() => props.open && list.value.length > 0, () => emit('close'));
 const style = computed(() => ({
-  transform: `translateX(${dragX.value}px) scale(${zoom.value})`,
-  transition: dragX.value === 0 ? 'transform .18s ease-out' : 'none',
+    transform: `translateX(${dragX.value}px) scale(${zoom.value})`,
+    transition: dragX.value === 0 ? 'transform .18s ease-out' : 'none',
 }));
-
 async function load(): Promise<void> {
-  url.value = null;
-  zoom.value = 1;
-  dragX.value = 0;
-  const p = list.value[props.index];
-  if (!p) return;
-  url.value = await mediaUrl(p);
+    url.value = null;
+    zoom.value = 1;
+    dragX.value = 0;
+    const p = list.value[props.index];
+    if (!p)
+        return;
+    url.value = await mediaUrl(p);
 }
-
 watch(() => [props.open, props.index, props.paths.length], () => {
-  if (props.open) void load();
+    if (props.open)
+        void load();
 }, { immediate: true });
-
 function go(delta: number): void {
-  const next = props.index + delta;
-  if (next < 0 || next >= list.value.length) return;
-  emit('change', next);
+    const next = props.index + delta;
+    if (next < 0 || next >= list.value.length)
+        return;
+    emit('change', next);
 }
-
-// 左右滑动切换（超过 60px 算一次）
 let startX = 0;
 let tracking = false;
 let fromEdge = false;
 function down(e: PointerEvent): void {
-  if (zoom.value > 1) return;
-  tracking = true;
-  startX = e.clientX;
-  fromEdge = e.clientX < 32;   // 从左边缘开始滑 = 关闭
+    if (zoom.value > 1)
+        return;
+    tracking = true;
+    startX = e.clientX;
+    fromEdge = e.clientX < 32;
 }
 function move(e: PointerEvent): void {
-  if (!tracking) return;
-  dragX.value = e.clientX - startX;
+    if (!tracking)
+        return;
+    dragX.value = e.clientX - startX;
 }
 function up(): void {
-  if (!tracking) return;
-  tracking = false;
-  const dx = dragX.value;
-  dragX.value = 0;
-  if (fromEdge && dx > 60) { emit('close'); return; }   // 边缘右滑：关闭查看器
-  if (Math.abs(dx) > 60) go(dx < 0 ? 1 : -1);
+    if (!tracking)
+        return;
+    tracking = false;
+    const dx = dragX.value;
+    dragX.value = 0;
+    if (fromEdge && dx > 60) {
+        emit('close');
+        return;
+    }
+    if (Math.abs(dx) > 60)
+        go(dx < 0 ? 1 : -1);
 }
-
 function onKey(e: KeyboardEvent): void {
-  if (!props.open) return;
-  if (e.key === 'Escape') emit('close');
-  if (e.key === 'ArrowLeft') go(-1);
-  if (e.key === 'ArrowRight') go(1);
+    if (!props.open)
+        return;
+    if (e.key === 'Escape')
+        emit('close');
+    if (e.key === 'ArrowLeft')
+        go(-1);
+    if (e.key === 'ArrowRight')
+        go(1);
 }
 window.addEventListener('keydown', onKey);
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey));

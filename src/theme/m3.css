@@ -1,11 +1,11 @@
-/* Material 3 外观：圆角矩形按钮、胶囊搜索框、圆角弹窗、无分割线列表。颜色变量见 appearance.ts */
 
-/* ---- 顶栏 ---- */
+
+
 ion-header.md::after { display: none; }
 ion-toolbar { --border-width: 0; --background: var(--md-surface); }
 ion-title { font-size: 22px; font-weight: 500; letter-spacing: 0; }
 
-/* ---- 按钮：圆角矩形 ---- */
+
 ion-button {
   --border-radius: 14px;
   --box-shadow: none;
@@ -27,7 +27,7 @@ ion-fab-button {
   --box-shadow: 0 3px 8px rgba(0, 0, 0, 0.28);
 }
 
-/* ---- 搜索框：胶囊 ---- */
+
 ion-searchbar {
   --border-radius: 28px;
   --background: var(--md-surface-container-high);
@@ -41,11 +41,11 @@ ion-searchbar {
   height: 56px;
 }
 
-/* ---- 输入框 ---- */
+
 ion-input.m3-field,
 ion-textarea.m3-field { --border-radius: 14px; --highlight-color-focused: var(--md-primary); }
 
-/* ---- 分段按钮 ---- */
+
 ion-segment {
   --background: var(--md-surface-container-high);
   border-radius: 14px;
@@ -63,18 +63,18 @@ ion-segment-button {
   letter-spacing: 0;
 }
 
-/* ---- 列表 ---- */
+
 ion-item { --inner-border-width: 0; --border-width: 0; }
 ion-badge { --background: var(--md-primary); --color: var(--md-on-primary); border-radius: 12px; padding: 3px 8px; font-weight: 500; }
 
-/* ---- 弹窗 / 菜单 ---- */
+
 ion-alert .alert-wrapper { border-radius: 28px; background: var(--md-surface-container-high); }
 ion-alert .alert-button { border-radius: 14px; text-transform: none; font-weight: 500; }
 ion-action-sheet .action-sheet-group { border-radius: 28px; background: var(--md-surface-container-high); }
 ion-action-sheet .action-sheet-cancel { border-radius: 28px; }
 ion-action-sheet { --button-background: transparent; }
 
-/* 长按菜单：浮起来的圆角卡片，和 App 里其他弹窗统一 */
+
 ion-action-sheet { --background: transparent; }
 ion-action-sheet .action-sheet-wrapper {
   padding: 0 12px calc(14px + var(--ion-safe-area-bottom, 0px));
@@ -116,10 +116,10 @@ ion-modal.m3-dialog {
 }
 ion-modal.m3-dialog.tall { --height: 72vh; }
 
-/* ---- 头像 / 小标题 ---- */
+
 .section-title { color: var(--md-primary); font-size: 13px; font-weight: 500; letter-spacing: 0.02em; text-transform: none; }
 
-/* ---- 一体化：所有页面同一块底色，头部不再有分割条 / 阴影 / 灰块 ---- */
+
 ion-header { box-shadow: none; }
 ion-header ion-toolbar { --background: var(--md-surface); --border-width: 0; }
 ion-toolbar.md { --border-width: 0; }
@@ -127,7 +127,7 @@ ion-content { --background: var(--md-surface); }
 ion-list { background: transparent; padding-top: 0; padding-bottom: 0; }
 ion-item { --background: transparent; }
 
-/* 搜索框统一成 46 高胶囊，左右留白和列表对齐 */
+
 ion-searchbar {
   --border-radius: 999px;
   --box-shadow: none !important;
@@ -138,7 +138,7 @@ ion-searchbar {
   border: 0 !important;
 }
 
-/* 硬性去掉头部/搜索栏周边的灰块与阴影，保证页面连成一片 */
+
 ion-header,
 ion-toolbar {
   box-shadow: none !important;
@@ -150,14 +150,14 @@ ion-header::before,
 ion-toolbar::after,
 ion-toolbar::before { display: none !important; background: none !important; }
 
-/* searchbar 内层也不许有阴影 */
+
 ion-searchbar .searchbar-input-container,
 ion-searchbar .searchbar-input {
   box-shadow: none !important;
 }
 
 
-/* ===== Liquid Glass：半透明 + 背景模糊 + 高光描边 ===== */
+
 .glass {
   background: color-mix(in srgb, var(--md-surface) 62%, transparent);
   backdrop-filter: blur(24px) saturate(180%);
@@ -166,10 +166,15 @@ ion-searchbar .searchbar-input {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
-/* 低版本 WebView 不支持 backdrop-filter 时退化成半透明纯色 */
+
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass {
     background: var(--md-surface-container-high);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
   }
+}
+ion-modal::part(backdrop) {
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  background: rgba(0, 0, 0, .38);
 }

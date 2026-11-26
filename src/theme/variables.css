@@ -1,8 +1,8 @@
-/* 颜色由 src/theme/appearance.ts 按 Material 3 方案动态写入，这里只放字体和安全区 */
+
 :root {
   --ion-font-family: Roboto, -apple-system, 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
 
-  /* 状态栏 / 底部手势条的安全区。优先用 Capacitor 注入的变量，没有就用系统的 env() */
+  
   --ion-safe-area-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   --ion-safe-area-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   --ion-safe-area-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));

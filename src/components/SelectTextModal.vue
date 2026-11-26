@@ -13,37 +13,39 @@
   </ion-modal>
 </template>
 
-<script setup lang="ts">
-import { ref } from 'vue';
+<script setup lang="ts">import { ref } from 'vue';
 import { IonModal, IonButton } from '@ionic/vue';
 import { copyText } from '@/lib/clipboard';
 import { showToast } from '@/lib/toast';
-
-defineProps<{ open: boolean; text: string }>();
-const emit = defineEmits<{ (e: 'close'): void }>();
-
+defineProps<{
+    open: boolean;
+    text: string;
+}>();
+const emit = defineEmits<{
+    (e: 'close'): void;
+}>();
 const box = ref<HTMLElement | null>(null);
-
 function selectAll(): void {
-  const el = box.value;
-  const sel = window.getSelection();
-  if (!el || !sel) return;
-  const r = document.createRange();
-  r.selectNodeContents(el);
-  sel.removeAllRanges();
-  sel.addRange(r);
+    const el = box.value;
+    const sel = window.getSelection();
+    if (!el || !sel)
+        return;
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    sel.removeAllRanges();
+    sel.addRange(r);
 }
-
-// 有选中内容就复制选中的，没有就复制全部
 async function copy(): Promise<void> {
-  const el = box.value;
-  const sel = window.getSelection();
-  let chosen = '';
-  if (el && sel && sel.rangeCount && el.contains(sel.anchorNode) && el.contains(sel.focusNode)) chosen = sel.toString();
-  const all = !chosen;
-  const ok = await copyText(all ? (el?.textContent ?? '') : chosen);
-  void showToast(ok ? (all ? '已复制全部内容' : '已复制所选内容') : '复制失败');
-  if (ok) emit('close');
+    const el = box.value;
+    const sel = window.getSelection();
+    let chosen = '';
+    if (el && sel && sel.rangeCount && el.contains(sel.anchorNode) && el.contains(sel.focusNode))
+        chosen = sel.toString();
+    const all = !chosen;
+    const ok = await copyText(all ? (el?.textContent ?? '') : chosen);
+    void showToast(ok ? (all ? '已复制全部内容' : '已复制所选内容') : '复制失败');
+    if (ok)
+        emit('close');
 }
 </script>
 
@@ -62,7 +64,7 @@ async function copy(): Promise<void> {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-/* Ionic 在手机上默认禁止选中文字，这里单独放开 */
+
 .sel, .sel * { user-select: text !important; -webkit-user-select: text !important; }
 .hint { font-size: 12px; color: var(--md-on-surface-variant); }
 .actions { display: flex; justify-content: flex-end; gap: 4px; }

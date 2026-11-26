@@ -13,7 +13,7 @@
     </ion-header>
 
     <ion-content class="ion-padding">
-      <!-- 预览：和聊天页用同一套颜色变量 -->
+      
       <div class="preview" :style="bubbleVars">
         <div class="pv-bg" :style="{ background: chatBackground }">
           <div class="pill">今天</div>
@@ -62,6 +62,12 @@
         </label>
       </div>
 
+      <button type="button" class="more-toggle" @click="advancedOpen = !advancedOpen">
+        <span>{{ advancedOpen ? '收起更多外观设置' : '更多外观设置' }}</span>
+        <span class="chev">{{ advancedOpen ? '⌃' : '⌄' }}</span>
+      </button>
+
+      <template v-if="advancedOpen">
       <div class="section-title">聊天背景</div>
       <ion-segment :value="appearance.bgKind" @ionChange="onKind">
         <ion-segment-button value="none"><ion-label>默认</ion-label></ion-segment-button>
@@ -87,12 +93,12 @@
         <div class="section-title">背景透明度　{{ appearance.bgOpacity }}%</div>
         <ion-range :min="0" :max="100" :step="1" :value="appearance.bgOpacity" aria-label="背景透明度" @ionInput="onOpacity" />
       </template>
+      </template>
     </ion-content>
   </ion-modal>
 </template>
 
-<script setup lang="ts">
-import { onMounted, ref } from 'vue';
+<script setup lang="ts">import { onMounted, ref } from 'vue';
 import { IonModal, IonHeader, IonToolbar, IonButtons, IonButton, IonTitle, IonContent, IonSegment, IonSegmentButton, IonLabel, IonRange, IonIcon } from '@ionic/vue';
 import { closeOutline, colorPaletteOutline, imageOutline } from 'ionicons/icons';
 import { appearance, bubbleVars, chatBackground, BG_COLOR_PRESETS, SEED_PRESETS, removeChatImage, resetAppearance, setChatImage } from '@/theme/appearance';
@@ -100,61 +106,78 @@ import type { BgKind, ThemeMode } from '@/theme/appearance';
 import { showToast } from '@/lib/toast';
 import { db } from '@/lib/supabase';
 import { session } from '@/stores/session';
-import { loadMyTitles, titleStyle } from '@/stores/titles';
+import { loadMyTitles, reloadTitle, titleStyle } from '@/stores/titles';
 import type { OwnedTitle } from '@/stores/titles';
-
-defineProps<{ open: boolean }>();
-const emit = defineEmits<{ (e: 'close'): void }>();
-
+defineProps<{
+    open: boolean;
+}>();
+const emit = defineEmits<{
+    (e: 'close'): void;
+}>();
+const advancedOpen = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
-
 const myTitles = ref<OwnedTitle[]>([]);
 const shownTitleId = ref<string | null>(null);
-
 async function loadTitles(): Promise<void> {
-  const uid = session.user?.id;
-  if (!uid) return;
-  myTitles.value = await loadMyTitles(uid);
-  const { data } = await db.from('profiles').select('shown_title').eq('id', uid).maybeSingle();
-  shownTitleId.value = (data?.shown_title as string | null) ?? null;
+    const uid = session.user?.id;
+    if (!uid)
+        return;
+    myTitles.value = await loadMyTitles(uid);
+    const { data } = await db.from('profiles').select('shown_title').eq('id', uid).maybeSingle();
+    shownTitleId.value = (data?.shown_title as string | null) ?? null;
 }
-
 async function pickTitle(id: string | null): Promise<void> {
-  const uid = session.user?.id;
-  if (!uid) return;
-  shownTitleId.value = id;
-  const { error } = await db.from('profiles').update({ shown_title: id }).eq('id', uid);
-  if (error) { void showToast('保存失败：' + error.message); return; }
-  void showToast(id ? '已更新显示的称号' : '已隐藏称号');
+    const uid = session.user?.id;
+    if (!uid)
+        return;
+    const prev = shownTitleId.value;
+    shownTitleId.value = id;
+    const { error } = await db.from('profiles').update({ shown_title: id }).eq('id', uid);
+    if (error) {
+        shownTitleId.value = prev;
+        void showToast('保存失败：' + error.message);
+        return;
+    }
+    void reloadTitle(uid);
+    void showToast(id ? '已更新显示的称号' : '已隐藏称号');
 }
-
 onMounted(() => { void loadTitles(); });
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
-
 function onMode(ev: CustomEvent): void {
-  const v = (ev.detail as { value?: ThemeMode }).value;
-  if (v) appearance.mode = v;
+    const v = (ev.detail as {
+        value?: ThemeMode;
+    }).value;
+    if (v)
+        appearance.mode = v;
 }
 function onKind(ev: CustomEvent): void {
-  const v = (ev.detail as { value?: BgKind }).value;
-  if (!v) return;
-  appearance.bgKind = v;
-  if (v === 'image' && !appearance.image) fileInput.value?.click();   // 还没选过图片：直接弹出选择
+    const v = (ev.detail as {
+        value?: BgKind;
+    }).value;
+    if (!v)
+        return;
+    appearance.bgKind = v;
+    if (v === 'image' && !appearance.image)
+        fileInput.value?.click();
 }
 function onOpacity(ev: CustomEvent): void {
-  appearance.bgOpacity = Number((ev.detail as { value?: number }).value ?? 100);
+    appearance.bgOpacity = Number((ev.detail as {
+        value?: number;
+    }).value ?? 100);
 }
 async function onFile(ev: Event): Promise<void> {
-  const input = ev.target as HTMLInputElement;
-  const f = input.files?.[0];
-  input.value = '';
-  if (!f) return;
-  const err = await setChatImage(f);
-  if (err) void showToast(err, 3000);
+    const input = ev.target as HTMLInputElement;
+    const f = input.files?.[0];
+    input.value = '';
+    if (!f)
+        return;
+    const err = await setChatImage(f);
+    if (err)
+        void showToast(err, 3000);
 }
 function onReset(): void {
-  resetAppearance();
-  void showToast('已恢复默认外观');
+    resetAppearance();
+    void showToast('已恢复默认外观');
 }
 </script>
 
@@ -182,4 +205,12 @@ function onReset(): void {
 .tit.off { opacity: .55; }
 .tit .chip { padding: 2px 8px; border-radius: 8px; background: rgba(127,127,127,.16); font-weight: 600; }
 .tit-empty { margin: 2px 0 0; font-size: 12px; color: var(--md-on-surface-variant); }
+.more-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; margin: 14px 0 4px; padding: 11px 14px;
+  border: 0; border-radius: 14px;
+  background: var(--md-surface-container); color: var(--md-on-surface-variant);
+  font-size: 13px;
+}
+.more-toggle .chev { opacity: .7; }
 </style>

@@ -31,48 +31,46 @@
   </ion-modal>
 </template>
 
-<script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+<script setup lang="ts">import { computed, ref, watch } from 'vue';
 import { IonModal, IonHeader, IonToolbar, IonButtons, IonButton, IonTitle, IonContent, IonInput, IonList, IonItem, IonCheckbox } from '@ionic/vue';
-
 const props = defineProps<{
-  open: boolean;
-  title: string;
-  confirmText: string;
-  friends: { id: string; name: string }[];
-  askName?: boolean;
-  busy?: boolean;
-  emptyText?: string;
+    open: boolean;
+    title: string;
+    confirmText: string;
+    friends: {
+        id: string;
+        name: string;
+    }[];
+    askName?: boolean;
+    busy?: boolean;
+    emptyText?: string;
 }>();
-
 const emit = defineEmits<{
-  (e: 'close'): void;
-  (e: 'submit', payload: { ids: string[]; name: string }): void;
+    (e: 'close'): void;
+    (e: 'submit', payload: {
+        ids: string[];
+        name: string;
+    }): void;
 }>();
-
 const picked = ref<string[]>([]);
 const name = ref('');
-
-// 每次打开都清空上一次的选择
-watch(
-  () => props.open,
-  v => {
+watch(() => props.open, v => {
     if (v) {
-      picked.value = [];
-      name.value = '';
+        picked.value = [];
+        name.value = '';
     }
-  },
-);
-
+});
 const canSubmit = computed(() => picked.value.length > 0 && (!props.askName || name.value.trim().length > 0));
-
 function onCheck(id: string, ev: CustomEvent): void {
-  const checked = !!(ev.detail as { checked?: boolean }).checked;
-  if (checked && !picked.value.includes(id)) picked.value = [...picked.value, id];
-  if (!checked) picked.value = picked.value.filter(x => x !== id);
+    const checked = !!(ev.detail as {
+        checked?: boolean;
+    }).checked;
+    if (checked && !picked.value.includes(id))
+        picked.value = [...picked.value, id];
+    if (!checked)
+        picked.value = picked.value.filter(x => x !== id);
 }
-
 function submit(): void {
-  emit('submit', { ids: [...picked.value], name: name.value.trim() });
+    emit('submit', { ids: [...picked.value], name: name.value.trim() });
 }
 </script>

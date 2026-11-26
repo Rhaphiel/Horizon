@@ -26,25 +26,27 @@
   </Teleport>
 </template>
 
-<script setup lang="ts">
-import { computed } from 'vue';
+<script setup lang="ts">import { computed } from 'vue';
 import type { ReleaseInfo } from '@/services/updates';
 import { openRelease } from '@/services/updates';
-
-const props = defineProps<{ open: boolean; info: ReleaseInfo | null }>();
-const emit = defineEmits<{ close: [] }>();
-
-// 把 Release 正文拆成一行一行的，顺便去掉 markdown 的井号和星号
-const lines = computed(() =>
-  (props.info?.body || '')
+import { useBackToClose } from '@/services/backButton';
+const props = defineProps<{
+    open: boolean;
+    info: ReleaseInfo | null;
+}>();
+const emit = defineEmits<{
+    close: [
+    ];
+}>();
+useBackToClose(() => props.open && !!props.info, () => emit('close'));
+const lines = computed(() => (props.info?.body || '')
     .split('\n')
     .map(l => l.replace(/^#+\s*/, '').replace(/\*\*/g, '').trim())
-    .filter(l => l.length > 0),
-);
-
+    .filter(l => l.length > 0));
 function go(): void {
-  if (props.info?.url) openRelease(props.info.url);
-  emit('close');
+    if (props.info?.url)
+        openRelease(props.info.url);
+    emit('close');
 }
 </script>
 

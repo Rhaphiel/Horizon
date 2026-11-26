@@ -14,35 +14,41 @@
   </Teleport>
 </template>
 
-<script setup lang="ts">
-import { ref } from 'vue';
+<script setup lang="ts">import { ref } from 'vue';
 import { db } from '@/lib/supabase';
-
-const props = defineProps<{ open: boolean }>();
-const emit = defineEmits<{ done: [handle: string] }>();
-
+const props = defineProps<{
+    open: boolean;
+}>();
+const emit = defineEmits<{
+    done: [
+        handle: string
+    ];
+}>();
 const value = ref('');
 const busy = ref(false);
 const err = ref('');
-
 async function submit(): Promise<void> {
-  const h = value.value.trim().replace(/^@/, '');
-  if (!/^[A-Za-z0-9_]{3,20}$/.test(h)) {
-    err.value = '需要 3–20 位大小写字母、数字或下划线';
-    return;
-  }
-  busy.value = true;
-  const { error } = await db.rpc('set_handle', { new_handle: h });
-  busy.value = false;
-  if (error) {
-    const m = error.message.includes('handle_taken') ? '这个账号名已经被占用'
-      : error.message.includes('handle_locked') ? '账号名一旦设置就不能再改'
-        : error.message.includes('invalid_handle') ? '格式不对：3–20 位字母、数字或下划线'
-          : error.message;
-    err.value = m;
-    return;
-  }
-  emit('done', h.toLowerCase());
+    const h = value.value.trim().replace(/^@/, '');
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(h)) {
+        err.value = '需要 3–20 位大小写字母、数字或下划线';
+        return;
+    }
+    busy.value = true;
+    const { error } = await db.rpc('set_handle', { new_handle: h });
+    busy.value = false;
+    if (error) {
+        if (error.message.includes('handle_locked')) {
+            emit('done', '');
+            return;
+        }
+        const m = error.message.includes('handle_taken') ? '这个账号名已经被占用'
+            : error.message.includes('handle_locked') ? '账号名一旦设置就不能再改'
+                : error.message.includes('invalid_handle') ? '格式不对：3–20 位字母、数字或下划线'
+                    : error.message;
+        err.value = m;
+        return;
+    }
+    emit('done', h.toLowerCase());
 }
 </script>
 

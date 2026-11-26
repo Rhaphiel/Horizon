@@ -4,8 +4,8 @@
       <div class="head">转发到…</div>
       <div class="preview">{{ preview }}</div>
       <div class="list">
-        <ion-list v-if="sortedChats.length">
-          <ion-item v-for="c in sortedChats" :key="c.id" lines="none" class="row">
+        <ion-list v-if="targets.length">
+          <ion-item v-for="c in targets" :key="c.id" lines="none" class="row">
             <Avatar slot="start" :name="chatTitle(c)" :size="40" />
             <ion-checkbox :checked="picked.includes(c.id)" @ionChange="onCheck(c.id, $event)">{{ chatTitle(c) }}</ion-checkbox>
           </ion-item>
@@ -22,33 +22,38 @@
   </ion-modal>
 </template>
 
-<script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+<script setup lang="ts">import { computed, ref, watch } from 'vue';
 import { IonModal, IonButton, IonList, IonItem, IonCheckbox } from '@ionic/vue';
 import Avatar from '@/components/Avatar.vue';
-import { chatTitle, sortedChats } from '@/stores/chats';
+import { canMessage, chatTitle, sortedChats } from '@/stores/chats';
 import { oneLine } from '@/lib/format';
-
-const props = defineProps<{ open: boolean; body: string; busy?: boolean }>();
-const emit = defineEmits<{ (e: 'close'): void; (e: 'submit', ids: string[]): void }>();
-
+const props = defineProps<{
+    open: boolean;
+    body: string;
+    busy?: boolean;
+}>();
+const emit = defineEmits<{
+    (e: 'close'): void;
+    (e: 'submit', ids: string[]): void;
+}>();
 const picked = ref<string[]>([]);
-watch(
-  () => props.open,
-  v => {
-    if (v) picked.value = [];
-  },
-);
-
-const preview = computed(() => {
-  const t = oneLine(props.body);
-  return t.length > 60 ? t.slice(0, 60) + '…' : t;
+watch(() => props.open, v => {
+    if (v)
+        picked.value = [];
 });
-
+const targets = computed(() => sortedChats.value.filter(canMessage));
+const preview = computed(() => {
+    const t = oneLine(props.body);
+    return t.length > 60 ? t.slice(0, 60) + '…' : t;
+});
 function onCheck(id: string, ev: CustomEvent): void {
-  const checked = !!(ev.detail as { checked?: boolean }).checked;
-  if (checked && !picked.value.includes(id)) picked.value = [...picked.value, id];
-  if (!checked) picked.value = picked.value.filter(x => x !== id);
+    const checked = !!(ev.detail as {
+        checked?: boolean;
+    }).checked;
+    if (checked && !picked.value.includes(id))
+        picked.value = [...picked.value, id];
+    if (!checked)
+        picked.value = picked.value.filter(x => x !== id);
 }
 </script>
 

@@ -44,12 +44,9 @@
         <ion-refresher-content />
       </ion-refresher>
 
-      <!-- 搜索结果：按会话分组（点进某个会话看具体消息） -->
+      
       <template v-if="searchMode && !detailCid">
-        <div class="section-title">
-          聊天记录
-          <span class="more">更多 ›</span>
-        </div>
+        <div class="section-title">聊天记录</div>
         <ion-list>
           <ion-item v-for="g in groups" :key="g.cid" button :detail="false" class="row" @click="openDetail(g.cid)">
             <Avatar slot="start" :name="g.title" :size="52" :src="g.avatar" />
@@ -68,7 +65,7 @@
         </ion-list>
       </template>
 
-      <!-- 某个会话里的命中消息 -->
+      
       <template v-else-if="searchMode && detailCid">
         <div class="detail-head">
           <Avatar :name="detailChat ? chatTitle(detailChat) : '聊天'" :size="44" :src="detailChat ? chatAvatar(detailChat) : null" />
@@ -92,7 +89,7 @@
         </ion-list>
       </template>
 
-      <!-- 聊天列表 -->
+      
       <ion-list v-if="!searchMode && sortedChats.length">
         <ion-item v-for="c in sortedChats" :key="c.id" button :detail="false" lines="none" class="row" @click="openChat(c.id)">
           <Avatar slot="start" :name="chatTitle(c)" :size="56" :src="chatAvatar(c)" />
@@ -108,12 +105,15 @@
             <p>{{ preview(c) }}</p>
           </ion-label>
           <div slot="end" class="end">
-            <span v-if="c.lastAt" :class="['time', { hot: c.unread > 0 }]">{{ fmtListTime(c.lastAt) }}</span>
-            <span v-if="c.unread > 0" class="unread">{{ c.unread > 99 ? '99+' : c.unread }}</span>
+            <span v-if="c.lastAt" :class="['time', { hot: c.unread > 0 && !c.muted }]">{{ fmtListTime(c.lastAt) }}</span>
+            <span class="badges">
+              <ion-icon v-if="c.muted" :icon="notificationsOffOutline" class="muted-ico" aria-label="已静音" />
+              <span v-if="c.unread > 0" :class="['unread', { quiet: c.muted }]">{{ c.unread > 99 ? '99+' : c.unread }}</span>
+            </span>
           </div>
         </ion-item>
       </ion-list>
-      <div v-else-if="chats.loaded" class="empty-tip">还没有聊天。点右上角 + 新建群聊，或在“好友”里点好友开聊。</div>
+      <div v-else-if="chats.loaded" class="empty-tip">还没有聊天。点右上角 + 新建群聊，或在“好友”里点「发消息」开聊。</div>
 
       <Teleport to="body">
       <div v-if="plusOpen" class="menu-backdrop" @click="plusOpen = false" />
@@ -130,7 +130,7 @@
       </div>
       </Teleport>
 
-      <!-- 称号管理（仅 100001 可见） -->
+      
       <div v-if="grantOpen" class="grant-mask" @click.self="closeGrant">
         <div class="grant-card">
           <h3>{{ editingId ? '修改称号' : '称号管理' }}</h3>
@@ -142,7 +142,7 @@
             </div>
           </label>
 
-          <!-- 该用户已有的称号 -->
+          
           <div v-if="targetName" class="titles-list">
             <div class="tl-head">给「{{ targetName }}」的称号</div>
             <p v-if="!targetTitles.length" class="tl-empty">还没有称号</p>
@@ -172,7 +172,7 @@
             <input v-model="nameTo" type="color" />
           </div>
 
-          <!-- 预览 -->
+          
           <div v-if="previewOn" class="preview">
             <span class="pv-label">预览</span>
             <div class="pv-row">
@@ -208,11 +208,10 @@
   </ion-page>
 </template>
 
-<script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+<script setup lang="ts">import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { IonPage, IonHeader, IonToolbar, IonTitle, IonButton, IonButtons, IonSearchbar, IonContent, IonRefresher, IonRefresherContent, IonList, IonItem, IonLabel, IonIcon } from '@ionic/vue';
-import { add, arrowBack, chatbubbleEllipsesOutline, chevronForward, personAddOutline, ribbonOutline } from 'ionicons/icons';
+import { add, arrowBack, chatbubbleEllipsesOutline, chevronForward, notificationsOffOutline, personAddOutline, ribbonOutline } from 'ionicons/icons';
 import Avatar from '@/components/Avatar.vue';
 import PickFriendsModal from '@/components/PickFriendsModal.vue';
 import { chats, sortedChats, chatTitle, getChat, loadChats } from '@/stores/chats';
@@ -230,12 +229,10 @@ import { searchMessages } from '@/services/messagesApi';
 import { createGroup } from '@/services/chatApi';
 import { openChat as goChat } from '@/services/navigation';
 import type { MessageRow } from '@/types/database';
-
 const router = useRouter();
 onMounted(() => {
-  void loadOwner();
+    void loadOwner();
 });
-
 const kw = ref('');
 const lastKw = ref('');
 const hits = ref<MessageRow[] | null>(null);
@@ -258,293 +255,305 @@ const targetName = ref('');
 const targetTitles = ref<OwnedTitle[]>([]);
 const targetAvatar = ref<string | null>(null);
 const previewOn = ref(false);
-
-// 预览用的样式（不写入数据库，只是看一眼效果）
 const previewChipStyle = computed(() => titleStyle({
-  text: grantText.value.trim() || '称号',
-  titleGradient: titleGrad.value,
-  titleFrom: titleFrom.value,
-  titleTo: titleTo.value,
-  nameGradient: false,
-  nameFrom: null,
-  nameTo: null,
+    text: grantText.value.trim() || '称号',
+    titleGradient: titleGrad.value,
+    titleFrom: titleFrom.value,
+    titleTo: titleTo.value,
+    nameGradient: false,
+    nameFrom: null,
+    nameTo: null,
 }));
 const previewNameStyle = computed(() => (nameGrad.value
-  ? {
-      backgroundImage: 'linear-gradient(90deg, ' + nameFrom.value + ', ' + nameTo.value + ')',
-      webkitBackgroundClip: 'text',
-      backgroundClip: 'text',
-      color: 'transparent',
+    ? {
+        backgroundImage: 'linear-gradient(90deg, ' + nameFrom.value + ', ' + nameTo.value + ')',
+        webkitBackgroundClip: 'text',
+        backgroundClip: 'text',
+        color: 'transparent',
     }
-  : {}));
-
+    : {}));
 async function loadTargetTitles(): Promise<void> {
-  const hid = Number(grantId.value.trim());
-  if (!hid) { void showToast('先填一个 HorizonID'); return; }
-  const { data, error } = await db.from('profiles').select('id,username,avatar_url').eq('horizon_id', hid).maybeSingle();
-  if (error) { void showToast('查询失败：' + error.message); return; }
-  if (!data) {
+    const hid = Number(grantId.value.trim());
+    if (!hid) {
+        void showToast('先填一个 HorizonID');
+        return;
+    }
+    const { data, error } = await db.from('profiles').select('id,username,avatar_url').eq('horizon_id', hid).maybeSingle();
+    if (error) {
+        void showToast('查询失败：' + error.message);
+        return;
+    }
+    if (!data) {
+        targetUserId.value = null;
+        targetName.value = '';
+        targetTitles.value = [];
+        void showToast('没有这个 HorizonID');
+        return;
+    }
+    targetUserId.value = data.id as string;
+    targetName.value = data.username as string;
+    targetAvatar.value = (data.avatar_url as string | null) ?? null;
+    targetTitles.value = await loadMyTitles(data.id as string);
+}
+function editTitle(t: OwnedTitle): void {
+    editingId.value = t.id;
+    grantText.value = t.text;
+    titleGrad.value = t.titleGradient;
+    nameGrad.value = t.nameGradient;
+    if (t.titleFrom)
+        titleFrom.value = t.titleFrom;
+    if (t.titleTo)
+        titleTo.value = t.titleTo;
+    if (t.nameFrom)
+        nameFrom.value = t.nameFrom;
+    if (t.nameTo)
+        nameTo.value = t.nameTo;
+}
+function cancelEdit(): void {
+    editingId.value = null;
+    grantText.value = '';
+    titleGrad.value = false;
+    nameGrad.value = false;
+}
+function closeGrant(): void {
+    grantOpen.value = false;
+    cancelEdit();
     targetUserId.value = null;
     targetName.value = '';
     targetTitles.value = [];
-    void showToast('没有这个 HorizonID');
-    return;
-  }
-  targetUserId.value = data.id as string;
-  targetName.value = data.username as string;
-  targetAvatar.value = (data.avatar_url as string | null) ?? null;
-  targetTitles.value = await loadMyTitles(data.id as string);
 }
-
-function editTitle(t: OwnedTitle): void {
-  editingId.value = t.id;
-  grantText.value = t.text;
-  titleGrad.value = t.titleGradient;
-  nameGrad.value = t.nameGradient;
-  if (t.titleFrom) titleFrom.value = t.titleFrom;
-  if (t.titleTo) titleTo.value = t.titleTo;
-  if (t.nameFrom) nameFrom.value = t.nameFrom;
-  if (t.nameTo) nameTo.value = t.nameTo;
-}
-
-function cancelEdit(): void {
-  editingId.value = null;
-  grantText.value = '';
-  titleGrad.value = false;
-  nameGrad.value = false;
-}
-
-function closeGrant(): void {
-  grantOpen.value = false;
-  cancelEdit();
-  targetUserId.value = null;
-  targetName.value = '';
-  targetTitles.value = [];
-}
-
 async function removeTitle(t: OwnedTitle): Promise<void> {
-  if (!(await confirmDialog('删除称号', '确定删除称号「' + t.text + '」吗？', '删除'))) return;
-  const { error } = await db.from('user_titles').delete().eq('id', t.id);
-  if (error) { void showToast('删除失败：' + error.message); return; }
-  void showToast('已删除');
-  if (grantId.value.trim()) await loadTargetTitles();
+    if (!(await confirmDialog('删除称号', '确定删除称号「' + t.text + '」吗？', '删除')))
+        return;
+    const { error } = await db.from('user_titles').delete().eq('id', t.id);
+    if (error) {
+        void showToast('删除失败：' + error.message);
+        return;
+    }
+    void showToast('已删除');
+    if (grantId.value.trim())
+        await loadTargetTitles();
 }
-
 async function loadOwner(): Promise<void> {
-  const uid = myId();
-  if (!uid) return;
-  const { data, error } = await db.from('profiles').select('horizon_id').eq('id', uid).maybeSingle();
-  if (error) console.warn('[owner] ' + error.message);
-  console.info('[owner] horizon_id =', data?.horizon_id);
-  isOwner.value = Number(data?.horizon_id) === 100001;
+    const uid = myId();
+    if (!uid)
+        return;
+    const { data, error } = await db.from('profiles').select('horizon_id').eq('id', uid).maybeSingle();
+    if (error)
+        console.warn('[owner] ' + error.message);
+    isOwner.value = Number(data?.horizon_id) === 100001;
 }
-
 function menuGrantTitle(): void {
-  plusOpen.value = false;
-  grantOpen.value = true;
+    plusOpen.value = false;
+    grantOpen.value = true;
 }
-
 async function doGrant(): Promise<void> {
-  if (editingId.value) {
-    const id = editingId.value;
+    if (editingId.value) {
+        const id = editingId.value;
+        const text = grantText.value.trim();
+        if (!text) {
+            void showToast('称号不能为空');
+            return;
+        }
+        grantBusy.value = true;
+        const { error } = await db.from('user_titles').update({
+            title: text,
+            title_gradient: titleGrad.value,
+            title_from: titleGrad.value ? titleFrom.value : null,
+            title_to: titleGrad.value ? titleTo.value : null,
+            name_gradient: nameGrad.value,
+            name_from: nameGrad.value ? nameFrom.value : null,
+            name_to: nameGrad.value ? nameTo.value : null,
+        }).eq('id', id);
+        grantBusy.value = false;
+        if (error) {
+            void showToast('保存失败：' + error.message);
+            return;
+        }
+        void showToast('已修改');
+        cancelEdit();
+        if (grantId.value.trim())
+            await loadTargetTitles();
+        return;
+    }
+    const hid = Number(grantId.value.trim());
     const text = grantText.value.trim();
-    if (!text) { void showToast('称号不能为空'); return; }
+    if (!hid || !text) {
+        void showToast('请填写 ID 和称号');
+        return;
+    }
+    if (Array.from(text).length > 10) {
+        void showToast('称号最多 10 个字');
+        return;
+    }
     grantBusy.value = true;
-    const { error } = await db.from('user_titles').update({
-      title: text,
-      title_gradient: titleGrad.value,
-      title_from: titleGrad.value ? titleFrom.value : null,
-      title_to: titleGrad.value ? titleTo.value : null,
-      name_gradient: nameGrad.value,
-      name_from: nameGrad.value ? nameFrom.value : null,
-      name_to: nameGrad.value ? nameTo.value : null,
-    }).eq('id', id);
+    const { error } = await db.rpc('grant_title', {
+        target_horizon_id: hid,
+        new_title: text,
+        title_grad: titleGrad.value,
+        title_from_hex: titleGrad.value ? titleFrom.value : null,
+        title_to_hex: titleGrad.value ? titleTo.value : null,
+        name_grad: nameGrad.value,
+        name_from_hex: nameGrad.value ? nameFrom.value : null,
+        name_to_hex: nameGrad.value ? nameTo.value : null,
+    });
     grantBusy.value = false;
-    if (error) { void showToast('保存失败：' + error.message); return; }
-    void showToast('已修改');
-    cancelEdit();
-    if (grantId.value.trim()) await loadTargetTitles();
-    return;
-  }
-  const hid = Number(grantId.value.trim());
-  const text = grantText.value.trim();
-  if (!hid || !text) { void showToast('请填写 ID 和称号'); return; }
-  if (text.length > 10) { void showToast('称号最多 10 个字'); return; }
-  grantBusy.value = true;
-  const { error } = await db.rpc('grant_title', {
-    target_horizon_id: hid,
-    new_title: text,
-    title_grad: titleGrad.value,
-    title_from_hex: titleGrad.value ? titleFrom.value : null,
-    title_to_hex: titleGrad.value ? titleTo.value : null,
-    name_grad: nameGrad.value,
-    name_from_hex: nameGrad.value ? nameFrom.value : null,
-    name_to_hex: nameGrad.value ? nameTo.value : null,
-  });
-  grantBusy.value = false;
-  if (error) {
-    const msg = error.message.includes('user_not_found') ? '没有这个 HorizonID' : error.message;
-    void showToast('授予失败：' + msg);
-    return;
-  }
-  grantOpen.value = false;
-  grantId.value = '';
-  grantText.value = '';
-  void showToast('称号已授予，TA 在「我的 → 外观」里可以选择显示');
+    if (error) {
+        const msg = error.message.includes('user_not_found') ? '没有这个 HorizonID' : error.message;
+        void showToast('授予失败：' + msg);
+        return;
+    }
+    grantOpen.value = false;
+    grantId.value = '';
+    grantText.value = '';
+    void showToast('称号已授予，TA 在「我的 → 外观」里可以选择显示');
 }
 const plusPos = ref<Record<string, string>>({});
-
 function openPlus(ev: Event): void {
-  const el = ev.currentTarget as HTMLElement | null;
-  const r = el?.getBoundingClientRect();
-  if (r) plusPos.value = { top: `${r.bottom + 8}px`, right: `${Math.max(12, window.innerWidth - r.right)}px` };
-  plusOpen.value = true;
+    const el = ev.currentTarget as HTMLElement | null;
+    const r = el?.getBoundingClientRect();
+    if (r)
+        plusPos.value = { top: `${r.bottom + 8}px`, right: `${Math.max(12, window.innerWidth - r.right)}px` };
+    plusOpen.value = true;
 }
 function menuCreateGroup(): void { plusOpen.value = false; groupOpen.value = true; }
 function menuAddFriend(): void { plusOpen.value = false; void router.push('/tabs/friends'); }
-
 const creating = ref(false);
-
 function openChat(id: string): void {
-  goChat(id);
+    goChat(id);
 }
-
-// 群聊用群头像；私聊用对方的头像（没有就用名字首字）
 function chatAvatar(c: Chat): string | null {
-  if (c.type === 'group') return c.avatarUrl;
-  const other = c.members.find(m => m.user_id !== myId());
-  return avatarOf(other?.user_id);
+    if (c.type === 'group')
+        return c.avatarUrl;
+    const other = c.members.find(m => m.user_id !== myId());
+    return avatarOf(other?.user_id);
 }
-
-// 私聊对方 id（群聊没有）
 function peerId(c: Chat): string | null {
-  if (c.type === 'group') return null;
-  return c.members.find(m => m.user_id !== myId())?.user_id ?? null;
+    if (c.type === 'group')
+        return null;
+    return c.members.find(m => m.user_id !== myId())?.user_id ?? null;
 }
-
 async function refreshTitles(): Promise<void> {
-  void loadOwner();
-  const ids = sortedChats.value.map(peerId).filter((x): x is string => !!x);
-  await ensureTitles(ids);
+    void loadOwner();
+    const ids = sortedChats.value.map(peerId).filter((x): x is string => !!x);
+    await ensureTitles(ids);
 }
-
 function preview(c: Chat): string {
-  if (!c.lastBody) return c.type === 'group' ? `群聊 · ${c.members.length} 人` : '私聊';
-  const text = oneLine(c.lastBody);
-  return c.type === 'group' && c.lastSender ? `${nameOf(c.lastSender)}: ${text}` : text;
+    if (!c.lastBody)
+        return c.type === 'group' ? `群聊 · ${c.members.length} 人` : '私聊';
+    const text = oneLine(c.lastBody);
+    return c.type === 'group' && c.lastSender ? `${nameOf(c.lastSender)}: ${text}` : text;
 }
-
-// 列表右侧的时间：今天显示时分，其他显示日期
 function fmtListTime(iso: string): string {
-  return fmtDay(iso) === fmtDay(new Date().toISOString()) ? fmtTime(iso) : fmtDay(iso);
+    return fmtDay(iso) === fmtDay(new Date().toISOString()) ? fmtTime(iso) : fmtDay(iso);
 }
-
 async function onRefresh(ev: CustomEvent): Promise<void> {
-  await Promise.all([loadChats(), loadFriends()]);
-  await refreshTitles();
-  (ev.target as unknown as { complete: () => void }).complete();
+    await Promise.all([loadChats(), loadFriends()]);
+    await refreshTitles();
+    (ev.target as unknown as {
+        complete: () => void;
+    }).complete();
 }
-
-// ----- 搜索所有聊天 -----
 const searchMode = ref(false);
 const detailCid = ref<string | null>(null);
-
 function enterSearch(): void {
-  searchMode.value = true;
+    searchMode.value = true;
 }
-
 function exitSearch(): void {
-  searchMode.value = false;
-  detailCid.value = null;
-  kw.value = '';
-  lastKw.value = '';
-  hits.value = null;
-}
-
-function clearKw(): void {
-  kw.value = '';
-  lastKw.value = '';
-  hits.value = null;
-  detailCid.value = null;
-}
-
-// 边输入边搜（debounce 由 searchbar 关掉，这里靠输入事件触发）
-function onInput(ev: CustomEvent): void {
-  const v = (ev.detail as { value?: string } | null)?.value ?? kw.value;
-  kw.value = v;
-  const q = v.trim();
-  if (!q) {
     clearKw();
-    return;
-  }
-  void runSearch(q);
+    searchMode.value = false;
 }
-
-async function runSearch(q: string): Promise<void> {
-  const { data, error } = await searchMessages(q);
-  if (error) {
-    void showToast('搜索失败：' + error.message);
-    return;
-  }
-  lastKw.value = q;
-  hits.value = data;
+let searchSeq = 0;
+let searchTimer = 0;
+const SEARCH_DELAY = 250;
+function clearKw(): void {
+    searchSeq += 1;
+    window.clearTimeout(searchTimer);
+    kw.value = '';
+    lastKw.value = '';
+    hits.value = null;
+    detailCid.value = null;
 }
-
-function clearSearch(): void {
-  clearKw();
-}
-
-// 结果按会话分组：一个会话一行，显示命中条数
-const groups = computed(() => {
-  const map = new Map<string, { cid: string; title: string; avatar: string | null; count: number }>();
-  for (const h of hits.value ?? []) {
-    const g = map.get(h.conversation_id);
-    if (g) {
-      g.count += 1;
-      continue;
+function onInput(ev: CustomEvent): void {
+    const v = (ev.detail as {
+        value?: string;
+    } | null)?.value ?? kw.value;
+    kw.value = v;
+    const q = v.trim();
+    if (!q) {
+        clearKw();
+        return;
     }
-    const c = getChat(h.conversation_id);
-    map.set(h.conversation_id, {
-      cid: h.conversation_id,
-      title: c ? chatTitle(c) : '聊天',
-      avatar: c ? chatAvatar(c) : null,
-      count: 1,
-    });
-  }
-  return [...map.values()].sort((a, b) => b.count - a.count);
+    window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(() => {
+        void runSearch(q);
+    }, SEARCH_DELAY);
+}
+async function runSearch(q: string): Promise<void> {
+    const seq = ++searchSeq;
+    const { data, error } = await searchMessages(q);
+    if (seq !== searchSeq)
+        return;
+    if (error) {
+        void showToast('搜索失败：' + error.message);
+        return;
+    }
+    lastKw.value = q;
+    hits.value = data;
+}
+const groups = computed(() => {
+    const map = new Map<string, {
+        cid: string;
+        title: string;
+        avatar: string | null;
+        count: number;
+    }>();
+    for (const h of hits.value ?? []) {
+        const g = map.get(h.conversation_id);
+        if (g) {
+            g.count += 1;
+            continue;
+        }
+        const c = getChat(h.conversation_id);
+        map.set(h.conversation_id, {
+            cid: h.conversation_id,
+            title: c ? chatTitle(c) : '聊天',
+            avatar: c ? chatAvatar(c) : null,
+            count: 1,
+        });
+    }
+    return [...map.values()].sort((a, b) => b.count - a.count);
 });
-
 const detailChat = computed(() => (detailCid.value ? getChat(detailCid.value) : null));
 const detailHits = computed(() => (hits.value ?? []).filter(h => h.conversation_id === detailCid.value));
-
 function openDetail(cid: string): void {
-  detailCid.value = cid;
+    detailCid.value = cid;
 }
-
 const parts = (body: string) => highlightParts(makeSnippet(body, lastKw.value), lastKw.value);
-
 function openHit(h: MessageRow): void {
-  goChat(h.conversation_id, { msg: h.id, at: h.created_at });
+    goChat(h.conversation_id, { msg: h.id, at: h.created_at });
 }
-
-// ----- 新建群聊 -----
-async function onCreateGroup(p: { ids: string[]; name: string }): Promise<void> {
-  if (creating.value) return;
-  creating.value = true;
-  const r = await createGroup(p.name, p.ids);
-  creating.value = false;
-  if (r.error || !r.id) {
-    void showToast(r.error || '创建失败');
-    return;
-  }
-  groupOpen.value = false;
-  void showToast('群聊已创建');
-  goChat(r.id);
+async function onCreateGroup(p: {
+    ids: string[];
+    name: string;
+}): Promise<void> {
+    if (creating.value)
+        return;
+    creating.value = true;
+    const r = await createGroup(p.name, p.ids);
+    creating.value = false;
+    if (r.error || !r.id) {
+        void showToast(r.error || '创建失败');
+        return;
+    }
+    groupOpen.value = false;
+    void showToast('群聊已创建');
+    goChat(r.id);
 }
 </script>
 
 <style scoped>
-/* 用户名右侧的称号 */
+
 .ttl {
   margin-left: 6px;
   padding: 1px 6px;
@@ -555,10 +564,12 @@ async function onCreateGroup(p: { ids: string[]; name: string }): Promise<void> 
   vertical-align: middle;
 }
 
-/* 授予称号弹窗 */
+
 .grant-mask {
   position: fixed; inset: 0; z-index: 99999;
-  background: rgba(0,0,0,.5);
+  background: rgba(0,0,0,.4);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
   display: grid; place-items: center; padding: 20px;
 }
 .grant-card {
@@ -581,7 +592,7 @@ async function onCreateGroup(p: { ids: string[]; name: string }): Promise<void> 
 .grant-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .grant-actions button { border: 0; border-radius: 12px; padding: 10px 16px; background: transparent; color: var(--md-on-surface-variant); font-size: 14px; }
 .grant-actions .primary { background: var(--md-primary); color: var(--md-on-primary); }
-/* 右上角 + 的浮动菜单 */
+
 .menu-backdrop { position: fixed; inset: 0; z-index: 9998; background: transparent; }
 .plus-pop {
   position: fixed;
@@ -599,7 +610,7 @@ async function onCreateGroup(p: { ids: string[]; name: string }): Promise<void> 
 }
 .plus-pop button:active { background: rgba(127,127,127,.16); }
 .plus-pop button ion-icon { font-size: 20px; color: var(--md-on-surface-variant); }
-/* 顶部与搜索：去掉灰块/阴影，做成一枚胶囊，页面整体连成一片 */
+
 ion-header { box-shadow: none; }
 ion-toolbar { --background: var(--md-surface); --border-width: 0; }
 .search-bar { --background: transparent; --border-width: 0; padding-bottom: 2px; }
@@ -614,20 +625,19 @@ ion-toolbar { --background: var(--md-surface); --border-width: 0; }
 }
 .search-row ion-searchbar.pill { flex: 1; padding: 0; }
 
-/* 分组结果 */
+
 .section-title { display: flex; align-items: center; justify-content: space-between; }
-.section-title .more { font-size: 13px; color: var(--md-on-surface-variant); text-transform: none; letter-spacing: 0; }
 .section-title.small { justify-content: flex-start; padding-top: 10px; }
 .chev { color: var(--md-on-surface-variant); font-size: 18px; }
 
-/* 进入某个会话后的头部 */
+
 .detail-head {
   display: flex; align-items: center; gap: 12px;
   padding: 12px 16px; font-size: 17px; font-weight: 500;
 }
 .detail-head span { flex: 1; }
 
-/* 命中消息 */
+
 .hit { --padding-start: 16px; --padding-end: 16px; --background: transparent; }
 .hit :deep(.avatar) { margin-right: 12px; }
 .hit-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
@@ -636,9 +646,6 @@ ion-toolbar { --background: var(--md-surface); --border-width: 0; }
 .hit-body { font-size: 14px; line-height: 1.5; margin: 0; }
 .hit-mark { color: var(--md-primary); font-weight: 600; }
 
-@media (prefers-color-scheme: dark) {
-  .section-title .more { color: var(--md-on-surface-variant); }
-}
 ion-searchbar.pill {
   --background: var(--md-surface-container);
   --border-radius: 999px;
@@ -651,7 +658,7 @@ ion-searchbar.pill {
   padding: 0 12px 8px;
 }
 
-/* 「搜索结果 / 全部聊天」和右侧按钮同基线 */
+
 .section-title { display: flex; align-items: center; gap: 6px; }
 .section-title ion-button {
   height: 26px;
@@ -690,4 +697,8 @@ ion-searchbar.pill {
 .pv-row { display: flex; align-items: center; gap: 10px; }
 .pv-name { font-size: 15px; font-weight: 500; }
 .row .ttl { margin-left: 0; line-height: 1; }
+
+.badges { display: flex; align-items: center; gap: 6px; min-height: 24px; }
+.unread.quiet { background: var(--md-surface-container-highest, rgba(127,127,127,.25)); color: var(--md-on-surface-variant); }
+.muted-ico { font-size: 16px; color: var(--md-on-surface-variant); }
 </style>
